@@ -1,0 +1,331 @@
+---
+title: "Lecture 4: Summarizing Data"
+output:
+  html_document:
+    df_print: paged
+---
+
+Frequency distribution example from Lecture 4.
+
+```{r}
+library(tidyverse)
+# create a list of the data from the lecture slides
+df <- as.tibble(c(1,	1,	2,	3,	3,	3,	3,	4,	4,	4),col.names=c('value'))
+
+# first compute the frequency distribution using the table() function
+
+freqdist <- table(df)
+print(freqdist)
+
+
+```
+
+
+Compute the cumulative distribution
+
+```{r}
+cumulative_freq <- cumsum(table(df))
+print(cumulative_freq)
+```
+
+Draw a histogram of the frequency distribution
+
+```{r}
+t=theme(axis.text=element_text(size=12),axis.title=element_text(size=16))
+ggplot(df, aes(value)) +
+  geom_histogram(binwidth=1,fill='blue') + t
+```
+
+Draw a frequency polygon for the frequency distribution
+
+```{r}
+ggplot(df, aes(value)) +
+  geom_freqpoly(binwidth=1) +t
+```
+
+Plot frequency polygon with density rather than frequency
+
+```{r}
+ggplot(df, aes(value,..density..)) +
+  geom_freqpoly(binwidth=1) +t 
+
+```
+
+Histogram for regenerating data.
+
+```{r}
+d=c(9,12,14,14,18,18,18,20,21)
+ggplot(data.frame(value=d), aes(value)) +
+  geom_histogram(binwidth=1,fill='blue') +
+  scale_x_continuous(breaks = round(seq(min(d), max(d), by = 1),1))
+```
+
+Plot the cumulative distribution.
+
+```{r}
+ggplot(df, aes(value)) + stat_ecdf() + ylab('Cumulative density')
+```
+
+Get proportion of scores greater than 2
+
+```{r}
+greaterThanTwo=df$value>2
+print('values:')
+print(greaterThanTwo)
+propGreaterThanTwo=mean(greaterThanTwo)
+print(paste('proportion greater than two:',propGreaterThanTwo))
+print(paste('Percentage greater than two:',100*propGreaterThanTwo))
+
+  
+
+```
+
+Make a stem and leaf plot
+
+```{r}
+dfStemLeaf <- as.tibble(c(8,8,9,10,12,12,14,18,21,22,23,25,25,30,32,51),col.names=c('value'))
+
+stem(dfStemLeaf$value)
+```
+
+### Working with continuous values
+
+Let's work with the weight measurements from the National Health and Nutrition Examination Survey (NHANES).
+
+First let's show a histogram of ages in the dataset.
+```{r}
+# if the NHANES package isn't already installed then install it first
+if (!require("NHANES")) install.packages("NHANES")
+library(NHANES)
+
+ggplot(NHANES, aes(Age)) + 
+  geom_histogram(binwidth=1,fill='blue')
+
+
+```
+
+What's up with the big spike at 80?
+Hint: Look at the help function for NHANES.
+
+#### Group Exercise:
+
+Break into groups of 4.  Together, each group should draw its best guess as to the shape of the histogram for Weight (in pounds) of individuals in the NHANES dataset.  You can look at the NHANES help if you need more information about the dataset.  However, you should not look at the Weight data in the NHANES dataset.
+
+```{r}
+
+# create a new variable with weight in pounds
+NHANES$WeightPounds <- NHANES$Weight * 2.2
+
+ggplot(NHANES, aes(Height)) + 
+  geom_histogram(binwidth=1,fill='blue')
+
+```
+
+Why is there a bump at the left?
+
+```{r}
+NHANES$isChild <- NHANES$Age<18
+
+ggplot(NHANES, aes(Height,fill=isChild)) + 
+  geom_histogram(binwidth=2)
+
+```
+
+### Idealized distributions
+
+Let's fit a normal distribution to the adult weight data.
+```{r}
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
+
+for (bw in c(0.1,1,5,20)){
+  p=ggplot(NHANES_adult, aes(Height)) + 
+    geom_histogram(binwidth=bw) + ggtitle(paste('binwidth = ',bw))
+  print(p)
+}
+rng=range(NHANES_adult$Height)
+bw=(rng[2]-rng[1])/nclass.FD(NHANES_adult$Height)
+ggplot(NHANES_adult, aes(Height)) + 
+    geom_histogram(bins=nclass.FD(NHANES_adult$Height)) + ggtitle(paste('binwidth = ',bw))
+
+print(paste('Optimal bin width by Freedman-Diaconis rule:',bw))
+```
+
+```{r}
+height_mean <- mean(NHANES_adult$Height,na.rm=TRUE)
+height_sd <- sd(NHANES_adult$Height,na.rm=TRUE)
+
+print(height_mean)
+print(height_sd)
+
+ggplot(NHANES_adult, aes(Height)) +
+  geom_histogram(aes(y=..density..),binwidth=2,
+                 fill = "gray")  + ylim(0,0.04)
+
+```
+
+```{r}
+sdcut=dnorm(height_mean-height_sd,mean=height_mean,sd=height_sd)
+meancut=dnorm(height_mean,mean=height_mean,sd=height_sd)
+ggplot(NHANES_adult, aes(Height)) +
+  geom_histogram(aes(y=..density..),binwidth=2,
+                 fill = "gray") + 
+  stat_function(fun = dnorm, args = list(mean = height_mean, sd = height_sd),color='blue',size=2) + 
+  ylim(0,0.04) +
+  annotate('point',x=height_mean,y=meancut,color='red',size=3) +
+  annotate('segment',x=height_mean-height_sd,xend=height_mean+height_sd,y=sdcut,yend=sdcut,color='green',size=2) +
+  annotate('segment',x=height_mean,xend=height_mean,y=0,yend=meancut,color='red',size=2)
+
+```
+
+Display the cumulative distribution of heights.
+
+```{r}
+ggplot(NHANES_adult, aes(Height)) +
+  geom_histogram(aes(y=cumsum(..count..)),binwidth=2,
+                 colour = "black", 
+                 fill = "white") +
+       stat_bin(aes(y=cumsum(..count..)),geom="line",color="blue",binwidth=2) +
+      ylab('Cumulative frequency') 
+  
+
+
+```
+
+Show it as a density rather than a frequency distribution.
+
+```{r}
+ggplot(NHANES_adult, aes(Height)) +
+  geom_histogram(aes(y=cumsum(..density..)),binwidth=1,
+                 colour = "black", 
+                 fill = "white") +
+        stat_ecdf(color='blue')   +
+      ylab('Cumulative density')
+
+# make a version with the distribution overlaid
+
+ggplot(NHANES_adult, aes(Height)) +
+  geom_histogram(aes(y=cumsum(..density..)),binwidth=1,
+                 colour = "black", 
+                 fill = "white") +
+        stat_ecdf(color='blue')   +
+      ylab('Density/Cumulative density') +
+  geom_histogram(aes(y=..density..),binwidth=1,color='red',alpha=0.5)
+
+
+```
+
+Not all variables are normally distributed.  Ratio scale variables will often be skewed because they can't be negative.  Here is an example using wait times at SFO Terminal A from Jan-Oct 2017 (from https://awt.cbp.gov/).
+```{r}
+waittimes=read.table('sfo_wait_times_2017.csv')
+names(waittimes)=c('waittime')
+ggplot(waittimes,aes(waittime)) +
+  geom_histogram(binwidth=1)
+```
+
+
+Another example is variables that involve counts of smallish numbers of things.  
+
+```{r}
+ggplot(NHANES_adult, aes(AlcoholYear)) +
+  geom_histogram(aes(y=..density..),binwidth=10,
+                 fill = "gray") 
+
+```
+
+
+### Long-tailed distributions
+
+Sometimes distributions look very different from normal.
+
+Load the Facebook friend data from the Stanford Large Network Database: https://snap.stanford.edu/data/egonets-Facebook.html
+
+and plot the distribution of social network sizes.
+
+```{r}
+fbdata=read.table('facebook_combined.txt')
+print(sprintf('found %d unique IDs',length(unique(fbdata[,1]))))
+# use the table function to compute how many times each individual ID shows up in the dataset
+friends_table=table(fbdata[,1])
+nfriends=as.data.frame(friends_table)
+names(nfriends)=c('ID','Nfriends')
+
+ggplot(nfriends, aes(Nfriends)) +
+  geom_histogram(aes(y=..density..),fill = "red",binwidth=2)  +
+  xlab('Number of friends') +
+  annotate('point',x=max(nfriends$Nfriends),y=0,color='blue',size=3) 
+
+```
+
+Plot this on a log scale
+
+```{r}
+nfriends$logNfriends=log(nfriends$Nfriends)
+
+ggplot(nfriends, aes(Nfriends,logNfriends)) + 
+  geom_line(size=1) + xlab('Number of friends') +
+  ylab('Log(number of friends)')
+
+
+ggplot(nfriends, aes(logNfriends)) +
+  geom_histogram(aes(y=..density..),fill = "red",binwidth=0.1)  +
+  xlab('log(number of friends)') +
+  annotate('point',x=max(nfriends$logNfriends),y=0,color='blue',size=3) 
+
+
+```
+
+Let's see how this works using a simple simulation.  We will start with two people and then add additional individuals one at a time.  Each of these new individuals will be friends with either one or two people, with the likelihood of friendship based on the relative number of friends that one has.  That is, the rich get richer.  We simulate this process using the Barabasi-Albert graph simulator in the NetworkX python package (in prefattach_simulation.py). These results are saved to a file that we load here.  We will also compare this to a social network of the same size where friendships are created randomly.
+
+```{r}
+degreeData=read.table('bagraph_degree.txt')
+degreeDataRandom=read.table('randgraph_degree.txt')
+
+ggplot(degreeData,aes(V1)) +
+  geom_histogram(bins=100) + xlab('Number of friends') + xlim(0,140) #+
+  #geom_histogram(data=degreeDataRandom,aes(V1),bins=100,fill='blue')
+
+ggplot(degreeDataRandom,aes(V1)) +
+  geom_histogram(bins=100) + xlab('Number of friends') + xlim(0,140)
+```
+
+Let's look at household income in the US.  Income data come from the IPUMS Current Population Survey (https://cps.ipums.org/cps/index.shtml), which includes data from 126,118 households.
+
+```{r}
+# code used to prepare data originally - now we just load them directly
+# data=read.table('cps_00001.csv',sep=',',header=TRUE)
+# df=subset(data,select=c(YEAR,INCTOT))
+# df=df %>% drop_na()
+# df=df[df$INCTOT<99999999,]
+# df=df[df$INCTOT>0,]
+# save(df,file='cps_income.Rdata')
+load('cps_income.Rdata')
+```
+
+```{r}
+ggplot(df,aes(INCTOT)) +
+  geom_histogram(bins=200) + xlab('Total household income') +
+  annotate('point',x=max(df$INCTOT),y=1,size=1.5,color='blue')
+
+# make a version that includes Taylor Swift at 170 million
+ggplot(df,aes(INCTOT)) +
+  geom_histogram(bins=200) + xlab('Total household income') +
+  annotate('point',x=170000000,y=1,size=1.5,color='blue')
+
+
+```
+
+Let's plot the same data as percentiles.
+
+```{r}
+percentileData=data.frame(pctile=seq(1,100),
+                          income=quantile(df$INCTOT,seq(1,100)/100),
+                          height=quantile(NHANES_adult$Height,seq(1,100)/100))
+ggplot(percentileData,aes(pctile,income)) + xlab('Percentile') +
+  geom_line(color='blue',size=1)
+
+
+ggplot(percentileData,aes(pctile,height)) + xlab('Percentile') +
+  geom_line(color='blue',size=1)
+
+```
+
