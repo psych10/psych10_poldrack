@@ -11,7 +11,7 @@ files=glob.glob('../notebooks/*/*.Rmd') + \
 packages=[]
 for file in files:
     with open(file) as f:
-        lines=[i.strip().split('(')[1].replace(')','') for i in f.readlines() if i.find('library')==0]
+        lines=[i.strip().split('(')[1].replace(')','') for i in f.readlines() if i.find('library')==0 or i.find('require')==0]
     packages=packages+lines
 packages=list(set(packages))
 for p in packages:
