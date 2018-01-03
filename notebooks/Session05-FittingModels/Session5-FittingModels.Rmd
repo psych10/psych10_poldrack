@@ -1,0 +1,354 @@
+---
+title: 'Lecture 4: Statistical models'
+output:
+  html_document:
+    df_print: paged
+---
+
+Let's start by looking at the height of children in NHANES.
+
+```{r}
+library(NHANES)
+library(ggplot2)
+library(dplyr)
+
+NHANES$isChild <- NHANES$Age<18
+
+NHANES_child=subset(NHANES,subset=isChild & Height!='NA')
+
+ggplot(data=NHANES_child,aes(Height)) + 
+  geom_histogram(bins=100)
+
+```
+
+What is the simplest equation that we could use to describe height?  Let's just start by guessing what the height should be.  One reasonable guess might be the most common value (i.e. the mode).  R doesn't have a built-in mode function, so we will create one.
+
+```{r}
+# Create the function.
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+print(paste("mode of children's height from NHANES:",getmode(NHANES_child$Height)))
+```
+
+Our model would then be:
+
+height(i) = 166.5 + error(i)
+
+Let's see how well that model fits the data.  We will quantify the fit of the model using the square root of the average squared error.  
+
+```{r}
+
+error = NHANES_child$Height - 166.5
+
+ggplot(NULL,aes(error)) + 
+  geom_histogram(bins=100)
+
+print(paste('average error (inches):',mean(error)))
+
+print(paste('root mean squared error (inches):',sqrt(mean(error**2)))) 
+
+```
+
+Is there a way to find a better model?  In principle, we would like the average error to be zero.  Because we are in control of the model, we can do this by replacing our guess with the actual average of the data.
+
+```{r}
+error_mean = NHANES_child$Height - mean(NHANES_child$Height)
+
+ggplot(NULL,aes(error_mean)) + 
+  geom_histogram(bins=100) + xlim(-60,60)
+
+print(paste('average error (inches):',mean(error_mean)))
+
+```
+
+Now we see that the average error is zero.  However, there is still error for each individual; sometimes it is positive, and sometimes it is negative.  
+
+So, we need a way to measure the fit of the model that will take both positive and negative errors into account.  We will use the squared error (**2 is the way to square a number in R).
+
+
+```{r}
+
+print(paste('average squared error:',mean(error_mean**2)))
+
+```
+
+This tells us that while on average we make no error, for any individual we could actually make quite a big error.  Could we make the model any better?  What else do we know about these individuals that might help us better estimate their height?  
+
+What about their age?  Let's plot height versus age and see how they are related.
+
+```{r}
+# plot height versus age
+ggplot(NHANES_child,aes(x=Age,y=Height)) +
+  geom_point(position = "jitter") +
+  geom_smooth()
+
+# find the best fitting model to predict height given age
+model_age=lm(Height ~ Age, data=NHANES_child)
+
+# the predict() function uses the fitted model to predict values for each person
+predicted_age=predict(model_age)
+
+error_age=NHANES_child$Height - predicted_age
+print(paste('average squared error:',mean(error_age**2)))
+
+ggplot(NULL,aes(error_age)) + 
+  geom_histogram(bins=100) + xlim(-60,60)
+
+
+```
+
+What else do we know that might be related to height?  How about gender?
+
+```{r}
+ggplot(NHANES_child,aes(x=Age,y=Height)) +
+  geom_point(aes(colour = factor(Gender)),position = "jitter",alpha=0.2) +
+  geom_smooth(aes(group=factor(Gender),colour = factor(Gender)))
+
+model_age_gender=lm(Height ~ Age + Gender, data=NHANES_child)
+predicted_age_gender=predict(model_age_gender)
+error_age_gender=NHANES_child$Height - predicted_age_gender
+sprintf("model: height = %f + %f*Age + %f*Gender",
+              model_age_gender$coefficients[1],
+              model_age_gender$coefficients[2],
+              model_age_gender$coefficients[3])
+print(paste('average squared error:',mean(error_age_gender**2)))
+
+ggplot(NULL,aes(error_age_gender)) + 
+  geom_histogram(bins=100) + xlim(-60,60)
+
+```
+
+Let's look at the error for the model that includes Age and Gender.
+
+```{r}
+ggplot(NULL,aes(error_age_gender)) + 
+  geom_histogram(bins=100) + xlim(-60,60)
+```
+
+We can also plot the average squared error for the four different models.
+
+```{r}
+error_df=data.frame(error=c(mean(error**2),mean(error_mean**2),
+                            mean(error_age**2),mean(error_age_gender**2)))
+row.names(error_df)=c('mode','mean','age','age+gender')
+ggplot(error_df,aes(x=row.names(error_df),y=error)) + 
+  geom_col() + 
+  ylab('average squared error') + xlab('Model')
+```
+
+This shows us that adding age to the model helped a lot, while adding gender to the model only helped a little bit.
+
+### Overfitting
+
+Often the model that fits the best to one sample is not the best model for another sample.
+
+First, let's generate some data so that we know what the true relation is between the variables.  We will add some random noise to simulate variability across people.
+
+```{r}
+NHANES_simulated=data.frame(Age=NHANES_child$Age)
+noiseLevel=20
+NHANES_simulated$Height = predict(model_age,NHANES_simulated) +   rnorm(dim(NHANES_simulated)[1],sd=noiseLevel)
+```
+
+```{r}
+sampleSize=16
+samp1=sample_n(NHANES_simulated,sampleSize)
+samp2=sample_n(NHANES_simulated,sampleSize)
+sse=data.frame(inSampleError=array(NA,dim=6),outOfSampleError=array(NA,dim=6),modelOrder=c(0,1,2,3,5,8))
+
+```
+
+```{r}
+
+for (i in 1:dim(sse)[1]){
+  modelOrder=sse$modelOrder[i]
+  if (modelOrder==0){
+      model=lm(Height ~ 1, data=samp1)
+  } else {
+    model=lm(Height ~ poly(Age,modelOrder), data=samp1)
+  }
+  sse$inSampleError[i]=sum((samp1$Height - predict(model))**2)
+  sse$outOfSampleError[i]=sum((samp2$Height - predict(model,samp2))**2)
+}
+
+
+ggplot(sse,aes(x=modelOrder,y=inSampleError)) +
+  geom_line() +
+  geom_line(aes(x=modelOrder,y=outOfSampleError),color='blue') 
+
+ggplot(samp1,aes(x=Age,y=Height)) +
+  geom_point() +
+  geom_smooth(method='lm',color='blue',se=FALSE,aes(colour='red')) 
+
+ggplot(samp1,aes(x=Age,y=Height)) +
+  geom_point() + 
+  geom_smooth(method='lm',formula=y~poly(x,8),color='red',se=FALSE) + 
+  geom_smooth(method='lm',color='blue',se=FALSE) 
+
+ggplot(samp2,aes(x=Age,y=Height)) +
+  geom_point() +
+  geom_smooth(data=samp1,method='lm',color='blue',se=FALSE,aes(colour='red')) 
+
+ggplot(samp2,aes(x=Age,y=Height)) +
+  geom_point() + 
+  geom_smooth(data=samp1,method='lm',formula=y~poly(x,8),color='red',se=FALSE) + 
+  geom_smooth(data=samp1,method='lm',color='blue',se=FALSE) 
+
+
+```
+
+
+### Mean as minimizing sum of squared deviations
+
+Let's examine a range of values and measure the deviation of the data from them, and then compare to the mean.
+```{r}
+df_error=data.frame(val=seq(100,175,0.1))
+df_error$sse=NA
+for (i in 1:dim(df_error)[1]){
+  err=NHANES_child$Height - df_error$val[i]
+  df_error$sse[i]=sum(err**2)
+}
+
+ggplot(df_error,aes(val,sse)) + geom_point(size=0.1) + 
+  xlab('test value') + ylab('Sum of squared errors') +
+  geom_vline(xintercept=mean(NHANES_child$Height),color='blue') +
+  annotate('text',x=mean(NHANES_child$Height)+3,y=max(df_error$sse),
+           label='mean',color='blue')
+
+print(paste("mean=",mean(NHANES_child$Height)))
+print(paste('minimum sum of squared errors at',df_error[df_error$sse==min(df_error$sse),]$val))
+
+```
+
+What happens if we look at the absolute deviation rather than the squared deviation? It turns out that in this case, the median is the measure that minimizes errors.
+
+```{r}
+df_error$abserror=NA
+for (i in 1:dim(df_error)[1]){
+  err=NHANES_child$Height - df_error$val[i]
+  df_error$abserror[i]=mean(abs(err))
+}
+
+ggplot(df_error,aes(val,abserror)) + geom_point(size=0.1) + 
+  xlab('test value') + ylab('Mean absolute error') +
+  geom_vline(xintercept=median(NHANES_child$Height),color='red') +
+  annotate('text',x=median(NHANES_child$Height)+4,y=max(df_error$abserror),
+           label='median',color='red')
+
+
+print(paste("median=",median(NHANES_child$Height)))
+print(paste('minimum absolute error at',df_error[df_error$abserror==min(df_error$abserror),]$val))
+      
+```
+### Sample size
+
+So far we have used the entire subset of 2,223 children from NHANES.  However, often we don't have the luxury of such a large sample.  What happens if we look at a much smaller sample? Let's sample 20 subjects from the complete group.
+
+```{r}
+print(paste('mean of full sample:',mean(NHANES_child$Height)))
+
+# sample_n() takes a random sample of a certain number of rows from a data frame
+samp=sample_n(NHANES_child,20)
+
+print(paste('mean of sample of 20:',mean(samp$Height)))
+```
+
+If you run that a few times you will see that the mean of the small sample jumps around quite a bit.  We can make this clearer by showing how the mean changes as we add samples to the dataset.
+
+```{r}
+samp=sample_n(NHANES_child,1000)
+sampsizes=seq(10,1000,10)
+sampmeans=array(data=NA,dim=length(sampsizes))
+for (i in 1:length(sampsizes)){
+  sampmeans[i]=mean(samp$Height[1:sampsizes[i]])
+}
+sampmeans_df=data.frame(sampsize=sampsizes,sampmean=sampmeans)
+
+ggplot(sampmeans_df,aes(sampsize,sampmean)) + geom_line() +
+  geom_hline(yintercept=mean(NHANES_child$Height),color='blue')
+```
+
+The estimated mean based on the small samples are much less consistent than those with larger samples.
+
+Let's do this many times and see what the results look like.
+
+```{r}
+nruns=100
+sampmeans=c()
+sampsizes=c()
+ss=seq(10,1000,10)
+runs=c()
+
+for (r in 1:nruns){
+  samp=sample_n(NHANES_child,1000)
+  for (i in 1:length(ss)){
+    sampmeans=c(sampmeans,mean(samp$Height[1:ss[i]]))
+    sampsizes=c(sampsizes,ss[i])
+    runs=c(runs,r)
+  }
+}
+sampmeans_df=data.frame(SampleMean=sampmeans,SampleSize=sampsizes,runs=runs)
+
+ggplot(sampmeans_df,aes(SampleSize,SampleMean,group=runs)) + geom_hline(yintercept=mean(NHANES_child$Height),color='black') +
+  geom_line(size=.1)
+
+```
+
+This is an example of how we can use *simulation* to get an intution about various statistical concepts.
+
+#### Effects of outliers
+```{r}
+library(knitr)
+
+# create a function to format monetary values
+# https://stackoverflow.com/questions/22070777/represent-numeric-value-with-typical-dollar-amount-format
+format.money  <- function(x, ...) {
+  paste0("$", formatC(as.numeric(x), format="f", digits=2, big.mark=","))
+}
+
+people=c('Joe','Karen','Mark','Andrea','Pat')
+income=c(48000,64000,58000,72000,66000)
+df=data.frame(people,income)
+kable(df)
+print(paste('mean income:',format.money(mean(df$income))))
+print(paste('median income:',format.money(median(df$income))))
+print(paste('std deviation:',format.money(sd(df$income))))
+print(paste('interquartile range:',format.money(IQR(df$income))))
+
+print("Pat leaves, and Beyonce walks into the bar")
+df=df %>% filter(people!='Pat') %>% add_row(people='Beyonce',income=54000000)
+kable(df)
+print(paste('mean income:',format.money(mean(df$income))))
+print(paste('median income:',format.money(median(df$income))))
+print(paste('std deviation:',format.money(sd(df$income))))
+print(paste('interquartile range:',format.money(IQR(df$income))))
+
+```
+
+### Degrees of freedom and estimating the variance
+
+Let's treat the entire NHANES child sample as our "population", and see how well the estimates of variance using either N or N-1 in the denominator will estimate the population variance.
+```{r}
+full_variance=var(NHANES_child$Height)
+print(paste('full variance:',full_variance))
+
+# take 100 samples and estimate the sample variance using both measures
+sampsize=50
+nsamp=1000
+varhat_n=array(data=NA,dim=nsamp)
+varhat_nm1=array(data=NA,dim=nsamp)
+
+for (i in 1:nsamp){
+  samp=sample_n(NHANES_child,1000)[1:sampsize,]
+  sampmean=mean(samp$Height)
+  sse=sum((samp$Height - sampmean)**2)
+  varhat_n[i]=sse/sampsize
+  varhat_nm1[i]=sse/(sampsize-1)
+}
+print(paste('variance estimate(N):',mean(varhat_n)))
+print(paste('variance estimate(N-1):',mean(varhat_nm1)))
+
+```
+
