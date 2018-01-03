@@ -1,3 +1,8 @@
+"""
+get a list of package installation commands
+for all of the R/Rmd files in the repo
+"""
+
 import os,glob
 
 
