@@ -8,7 +8,9 @@ output:
 Frequency distribution example from Lecture 4.
 
 ```{r}
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tibble)
 # create a list of the data from the lecture slides
 df <- as.tibble(c(1,	1,	2,	3,	3,	3,	3,	4,	4,	4),col.names=c('value'))
 
