@@ -5,7 +5,9 @@ output: html_notebook
 
 Here we analyze the election results as they came in during the special election for US Senator in Alabama on Dec 12, 2017 (transcribed from https://www.ajc.com/news/national/alabama-senate-race-live-updates-roy-moore-doug-jones/KPRfkdaweoiXICW3FHjXqI/).  
 ```{r}
-library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
 electionReturns=read.table('alabama_election_returns.csv',sep=',',header=TRUE) %>% gather(candidate,pctVotes,-pctResp)
 ggplot(electionReturns,aes(pctResp,pctVotes,color=candidate)) +
   geom_line(size=1) +
