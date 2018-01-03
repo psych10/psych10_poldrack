@@ -1,0 +1,171 @@
+---
+title: 'Lecture 6: Visualization'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+### showing the data
+
+Examples of a linear fit and the many ways it could be generated
+
+```{r}
+set.seed(1234567)
+npts=12
+df=data.frame(x=seq(1,npts))
+df$yClean=df$x + rnorm(npts,sd=0.1)
+pointSize=2
+t=theme(axis.text=element_text(size=12),axis.title=element_text(size=16))
+ggplot(df,aes(x,yClean)) + 
+  geom_smooth(method='lm',se=FALSE) + ylim(-5,20) +
+  ylab('Dental health') + xlab('Time spent flossing') + t
+  
+
+ggplot(df,aes(x,yClean)) + 
+  geom_point(size=pointSize) +
+  geom_smooth(method='lm',se=FALSE) + ylim(-5,20) +
+  ylab('Dental health') + xlab('Time spent flossing') + t
+
+df$yDirty=df$x+ rnorm(npts,sd=10)
+
+ggplot(df,aes(x,yDirty)) + 
+  geom_point(size=pointSize) +
+  geom_smooth(method='lm',se=FALSE)+ ylim(-5,20) +
+  ylab('Dental health') + xlab('Time spent flossing') + t
+
+df$yOutlier=rnorm(npts)
+df$yOutlier[npts]=200
+
+
+ggplot(df,aes(x,yOutlier)) + 
+  geom_point(size=pointSize) +
+  geom_smooth(method='lm',se=FALSE) +
+  ylab('Dental health') + xlab('Time spent flossing') + t
+
+```
+
+### Examples of good plotting
+
+Show box plots and violin plots
+
+```{r}
+library(NHANES)
+NHANES$isChild <- NHANES$Age<18
+
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
+
+# plot height by Gender
+dfmean=NHANES_adult %>% group_by(Gender) %>% summarise(Height=mean(Height))
+
+ggplot(dfmean,aes(x=Gender,y=Height)) + 
+  geom_bar(stat="identity",color='gray') + 
+  coord_cartesian(ylim=c(130,205)) +
+  ggtitle('Bar graph') + 
+  theme(aspect.ratio=1)  +
+  geom_jitter(data=NHANES_adult,aes(x=Gender,y=Height),width=0.1,alpha=0.3)
+
+
+
+ggplot(NHANES_adult,aes(x=Gender,y=Height)) + 
+  geom_violin() + 
+  ggtitle('Violin plot') + theme(aspect.ratio=1)
+
+ggplot(NHANES_adult,aes(x=Gender,y=Height)) + 
+  geom_boxplot() + 
+  ggtitle('Box plot') + theme(aspect.ratio=1)
+
+ggplot(subset(NHANES_adult,Gender=='female'),aes(Height))+
+  geom_histogram(binwidth = 1)
+
+```
+
+### Pie chart example
+
+Pie chart was generated using Excel.  Compare to a bar chart
+
+```{r}
+religionData=read.table('religion.csv',sep=',')
+names(religionData)=c('Religion','Percentage')
+religionData = arrange(religionData,desc(Percentage))
+religionData$Religion=factor(religionData$Religion,levels=religionData$Religion)
+ggplot(religionData,aes(Religion,Percentage,label=Percentage)) +
+  geom_bar(stat='identity') + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+
+### Effects of axis scaling
+
+use data from https://www.ucrdatatool.gov/Search/Crime/State/RunCrimeStatebyState.cfm
+
+```{r}
+crimeData=read.table('CrimeStatebyState.csv',sep=',',header=TRUE)
+crimeData = subset(crimeData,Year > 1989)
+crimeData$ViolentCrimePerCapita=crimeData$Violent.crime.total/crimeData$Population
+ggplot(crimeData,aes(Year,ViolentCrimePerCapita)) +
+  geom_line() + ylim(-0.05,0.05)
+
+ggplot(crimeData,aes(Year,ViolentCrimePerCapita)) +
+  geom_line() 
+
+ggplot(crimeData,aes(Year,ViolentCrimePerCapita)) +
+  geom_line()  + ylim(0,0.01)
+
+```
+
+### Data-ink ratio
+
+Examples of good or bad data/ink ratios
+
+```{r}
+ggplot(df,aes(x,yDirty)) + 
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE)+ ylim(-5,20) +
+  ylab('Dental health') + xlab('Time spent flossing')
+
+ggplot(df,aes(x,yDirty)) + 
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE)+ ylim(-5,20) +
+  ylab('Dental health') + xlab('Time spent flossing') +
+  theme(panel.grid.major = element_line(colour = "black",size=1)) +
+  theme(panel.grid.minor = element_line(colour = "black",size=1)) 
+
+
+```
+
+
+### correction for inflation
+Historical consumer price index data from https://inflationdata.com/Inflation/Consumer_Price_Index/HistoricalCPI.aspx?reloaded=true#Table
+```{r}
+cpiData=read.table('cpi_data.txt')
+cpiDataTidy <- gather(cpiData, key, value, -V1)
+head(cpiDataTidy)
+meanCPIData=cpiDataTidy %>% group_by(V1) %>% summarize(meanCPI=mean(value))
+ggplot(meanCPIData,aes(V1,meanCPI)) +
+  geom_line()
+```
+
+Let's look at average cost of a gallon of gas, from http://www.thepeoplehistory.com/70yearsofpricechange.html
+
+```{r}
+gasPriceData=data.frame(year=c(1930,1940,1950,1960,1970,1980,1990,2009,2013),
+                        gasPrice=c(.10,.11,.18,.25,.36,1.19,1.34,2.05,3.80))
+# convert to 2013 dollars
+cpiRef=meanCPIData[meanCPIData$V1==1950,]$meanCPI
+gasPriceData$gasPrice1950Dollars=array(NA,dim(gasPriceData)[1])
+for (i in 1:dim(gasPriceData)[1]){
+  cpiYear=meanCPIData[meanCPIData$V1==gasPriceData$year[i],]$meanCPI
+  gasPriceData$gasPrice1950Dollars[i]=gasPriceData$gasPrice[i]/(cpiYear/cpiRef)
+}
+ggplot(gasPriceData,aes(year,gasPrice)) +
+  geom_line(aes(color='Nominal'),size=1) +
+  geom_line(aes(year,gasPrice1950Dollars,color='Adjusted'),size=1) +
+  ylab('Gasoline prices') + xlab('year') 
+```
+
