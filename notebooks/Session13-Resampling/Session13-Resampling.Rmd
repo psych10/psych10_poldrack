@@ -1,0 +1,190 @@
+---
+title: 'Session 13: Resampling and simulation'
+output:
+  html_document:
+    df_print: paged
+---
+
+In this session we discuss the concept of Monte Carlo simulation and its use in statistics.  
+
+### Percentiles of a normal distribution
+
+We already know how to compute the 95th percentile of a normal distribution, but let's say that we didn't.  Could we use simulation to determine this?
+
+First, we would generate a large number of random samples from a normal distribution.  
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+samples=data.frame(samples=rnorm(1000000))
+
+ggplot(samples,aes(samples)) +
+  geom_histogram(bins=100)
+```
+
+Let's compare the 95th percentile of these samples to the theoretical 95th percentile of the normal distribution:
+
+```{r}
+pct_dist=quantile(samples$samples,0.95)
+print(paste('95th percentile of samples:',pct_dist))
+pct_theoretical=qnorm(0.95)
+print(paste('95th percentile of normal distribution:',pct_theoretical))
+
+```
+
+### The bootstrap
+
+Let's say that we want to generate confidence intervals for a statistic that we are computing on our data, but we might not know how to compute them directly.  We can use resampling to do this, via a method known as the "bootstrap", invented by Brad Efron of the Stanford Statistics Department.
+
+The idea behind the bootstrap is that we resample observations from our sample in order to estimate the variability of the statistic that we are computing. Let's say that we want to compute confidence intervals for the trimmed mean.  Our data are height measurements from 200 people sampled from the NHANES dataset.
+
+```{r}
+library(NHANES)
+
+sampSize=200
+
+NHANES$isChild <- NHANES$Age<18
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
+NHANES_sample=sample_n(NHANES_adult,sampSize)
+NHANES_sample=subset(NHANES_sample,select=c(Height,Gender,SleepTrouble))
+
+```
+
+To generate a bootstrap estimate of the confidence interval for the trimmed mean, we need to perform a number of resamples from our sample of interest.  We sample "with replacement,", meaning that once an individual is selected they get stuck back into the pool and could get selected again.
+
+Let's start by creating one such sample, and look at its characteristics.
+
+```{r}
+resamp=sample(NHANES_sample$Height,sampSize,replace=TRUE)
+print(paste('original data includes',length(unique(NHANES_sample$Height)),'unique values'))
+print(paste('resampled data includes',length(unique(resamp)),'unique values'))
+
+ggplot(NHANES_sample,aes(Height,color='black')) + geom_freqpoly(bins=50) +
+  geom_freqpoly(data=data.frame(resamp=resamp),aes(resamp,color='blue'),bins=50) +
+  scale_colour_manual(name='dataset',values=c('black'='black','blue'='blue'),labels=c('black'='original','blue'='resample'))
+```
+
+What you can see is that only a subset of original data points show up in the resampled dataset, which means that some subjects were included more than once in the resampled dataset.
+
+Now let's create a bunch of these and compute the mean and trimmed mean on each.
+```{r}
+nResamples=5000
+
+resampleTrimmedMeans=array(NA,nResamples)
+resampleMeans=array(NA,nResamples)
+
+for (i in 1:nResamples){
+  resamp=sample(NHANES_sample$Height,sampSize,replace=TRUE)
+  resampleTrimmedMeans[i]=mean(resamp,trim=0.1)
+  resampleMeans[i]=mean(resamp)
+}
+
+
+
+```
+
+First let's look at the confidence interval that is estimated for the mean, since we already know roughly what it should be, based on our use of the normal distribution.  To get the 95% confidence interval, we find the points in the distribution of estimated values that correspond to the top and bottom 2.5% of values, using the quantile() function.
+
+```{r}
+mean_bootci=quantile(resampleMeans,c(0.025,0.975))
+sampleMean=mean(NHANES_sample$Height)
+sampleSE=sd(NHANES_sample$Height)/sqrt(sampSize)
+mean_ci=c(sampleMean-sampleSE*1.96, sampleMean+sampleSE*1.96)
+
+trimmedMean_bootci=quantile(resampleTrimmedMeans,c(0.025,0.975))
+
+meanResults=as.data.frame(rbind(mean_ci,mean_bootci,trimmedMean_bootci))
+names(meanResults)=c('lowerCI','upperCI')
+meanResults$width=meanResults$upperCI - meanResults$lowerCI
+meanResults$mean=c(sampleMean,mean(resampleMeans),mean(resampleTrimmedMeans))
+meanResults=meanResults[,c('lowerCI','mean','upperCI','width')]
+row.names(meanResults)=c('Mean (normal)','Mean (boostrap)','Trimmed mean (bootstrap)')
+print(meanResults)
+```
+
+### Permutation testing
+
+Now let's say that we want to determine whether there is really a difference in height between males and females, using our sample from the NHANES data.  First, let's use the same code we used in the last session, to see how the confidence intervals compare to one another.
+
+```{r}
+heightDf=group_by(NHANES_sample, Gender) %>% summarise(mean=mean(Height),sd=sd(Height),n=length(Height))
+heightDf$se=heightDf$sd/sqrt(heightDf$n)
+heightDf$lowerCI=heightDf$mean - heightDf$se*1.96
+heightDf$upperCI=heightDf$mean + heightDf$se*1.96
+print(heightDf)
+```
+
+Once again, we see that there is a large difference in height between males and females in our group.  
+
+Now let's say that we would like to put a number on our confidence for *how different* these groups are.  The idea behind permutation testing is to generate a distribution of values that we would expect if there really was no difference between the groups, and then compare our observed difference to that distribution.  The way that we usually do this is to randomly shuffle (or *permute*) the labels for each individual; that is, we keep the overall distribution of heights the same, but we break the relationship between height and gender in the shuffled dataset, such that there should be no relationship between height and (shuffled) gender.  Let's see how this would work.
+
+```{r}
+
+trueMeanDiff=heightDf$mean[2] - heightDf$mean[1]
+print(paste('mean difference in height in the sample:',trueMeanDiff))
+NHANES_resample=NHANES_sample
+NHANES_resample$Gender=sample(NHANES_resample$Gender)
+print(paste('Proportion of subjects with the correct gender label in the resampled data:',sum(NHANES_resample$Gender==NHANES_sample$Gender)/sampSize))
+resampDf=group_by(NHANES_resample, Gender) %>% summarise(mean=mean(Height))
+resampMeanDiff=resampDf$mean[2] - resampDf$mean[1]
+print(paste('mean difference in height in the resampled data:',resampMeanDiff))
+
+```
+
+Now let's do it a bunch of times, each time recording the mean difference.
+
+```{r}
+nResamples=5000
+
+resampMeanDiff=array(NA,nResamples)
+NHANES_resample=NHANES_sample
+
+for (i in 1:nResamples){
+  NHANES_resample$Gender=sample(NHANES_resample$Gender)
+  resampDf=group_by(NHANES_resample, Gender) %>% summarise(mean=mean(Height))
+  resampMeanDiff[i]=resampDf$mean[2] - resampDf$mean[1]
+}
+```
+
+Now let's look at the distribution of differences in the resampled datasets.
+
+```{r}
+ggplot(data.frame(meanDiff=resampMeanDiff),aes(meanDiff)) +
+  geom_vline(xintercept=trueMeanDiff,color='blue') + 
+  geom_histogram(bins=100)
+print(paste('Mean difference across all resamples:',mean(resampMeanDiff)))
+```
+
+Using these data, we can now ask how likely it would be for us to find a difference as big as the one in the real data, if the "null hypothesis" of no difference was really true (as we made it in the permuted data).
+
+```{r}
+print(paste('Number of',nResamples,'permutations with a difference greater than',format(trueMeanDiff,digits=4),'=',
+            sum(trueMeanDiff<resampMeanDiff)))
+```
+
+This shows us that there is less than a 1/5000 chance of finding such a large difference between groups if the state of the world is that there is no difference.
+
+Let's try it with another variable that we don't think should have an effect. Let's look at whether the person has ever reported to a health professional that they have trouble sleeping.
+
+```{r}
+nResamples=5000
+
+resampMeanDiff=array(NA,nResamples)
+NHANES_resample=NHANES_sample
+
+for (i in 1:nResamples){
+  NHANES_resample$SleepTrouble=sample(NHANES_resample$SleepTrouble)
+  resampDf=group_by(NHANES_resample, SleepTrouble) %>% summarise(mean=mean(Height))
+  resampMeanDiff[i]=resampDf$mean[2] - resampDf$mean[1]
+}
+
+sleepDf=group_by(NHANES_sample, SleepTrouble) %>% summarise(mean=mean(Height),sd=sd(Height),n=length(Height))
+trueMeanDiff=sleepDf$mean[2] - sleepDf$mean[1]
+
+print(paste('Number of',nResamples,'permutations with a difference greater than',format(trueMeanDiff,digits=4),'=',
+            sum(trueMeanDiff<resampMeanDiff)))
+
+```
+
