@@ -1,0 +1,363 @@
+---
+title: 'Session 16: Hypothesis testing'
+output:
+  html_document:
+    df_print: paged
+---
+
+<a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+
+Load the libraries.
+
+```{r}
+
+library(NHANES)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+```
+
+
+Coin flipping example
+
+```{r}
+# set the random seed so that the sample is identical each time
+set.seed(1234567899)
+
+nSamples=50000
+sampleData=rbinom(nSamples,100,0.5)
+
+ggplot(data.frame(sampleData=sampleData),aes(sampleData)) +
+  geom_histogram(bins=100,binwidth=0.5,center=0) +
+  geom_vline(aes(xintercept=70),color='blue') +
+  xlab('Number of heads') 
+
+print(paste('Number of random samples >= 70 heads):',sum(sampleData>=70)))
+print(paste('Proportion of random samples >= 70 heads):',mean(sampleData>=70)))
+print(paste('Binomial distribution: p(X>=70|p=0.5):',1-pbinom(69,100,0.5)))
+```
+
+Let's test a question about the NHANES dataset, using a sample of 250 individuals: Is regular physical activity related to body mass index?
+
+```{r}
+# set the random seed so that the sample is identical each time
+set.seed(1234567899)
+
+
+NHANES$isChild <- NHANES$Age<18
+NHANES_adult=subset(NHANES,subset=!isChild & BMI!='NA' & PhysActive!='NA' )
+
+# take a sample from the NHANES dataset
+sampSize=250
+NHANES_sample=sample_n(NHANES_adult,sampSize)
+
+ggplot(NHANES_sample,aes(PhysActive,BMI)) +
+  geom_boxplot() + xlab('Physically active?') + ylab('Body Mass Index (BMI)')
+sampleSummary=group_by(NHANES_sample,PhysActive) %>% summarize(N=length(BMI),mean=mean(BMI),sd=sd(BMI))
+
+print(sampleSummary)
+meanDiff=sampleSummary[1,3] - sampleSummary[2,3]
+```
+
+
+Let's perform permutation to assess the distribution of proportions under the null hypothesis of no relations.  This is a fairly large dataset so this analysis could take a couple of minutes to complete.  
+
+```{r}
+nSamples=2500
+
+bmiData=subset(NHANES_adult,select=c(BMI,PhysActive))
+
+bmiDataShuffled=bmiData
+
+meanDiffSim=array(NA,nSamples)
+for (i in 1:nSamples){
+  #shuffle the labels
+  bmiDataShuffled$PhysActive=sample(bmiDataShuffled$PhysActive)
+  # compute the difference
+  simResult=t.test(bmiDataShuffled$BMI[bmiDataShuffled$PhysActive=='No'],bmiDataShuffled$BMI[bmiDataShuffled$PhysActive=='Yes'],var.equal=TRUE)
+  meanDiffSim[i]=simResult$statistic
+}
+
+meanDiffSimDf=data.frame(meanDiffSim=meanDiffSim)
+
+
+
+```
+
+
+Let's compare the histogram of differences under the null hypothesis to the observed difference between the groups.
+
+```{r}
+print(meanDiff)
+print(paste('maximum observed different in permutation sample:',max(meanDiffSimDf$meanDiffSim)))
+ggplot(meanDiffSimDf,aes(meanDiffSim)) +
+  geom_histogram(bins=200) +
+  geom_vline(aes(xintercept=meanDiff),color='blue') +
+  xlab('T stat: BMI difference between groups') +
+  geom_histogram(data=subset(meanDiffSimDf,subset=meanDiffSim>=meanDiff[1,1]),aes(meanDiffSim),bins=200,fill='orange')
+```
+
+Instead of using an empirical null distribution, it's common to use a theoretical null distribution.  For differences between means, the appropriate distribution is the Student's t distribution, with a number of degrees of freedom determined by the sample size; for two groups, since we are estimating the mean for each group, df = N - 2
+
+
+Let's plot the t distribution over the empirical null distribution.
+
+```{r}
+x=seq(-4,4,0.1)
+tdist=dt(x,sampSize)
+
+ggplot(meanDiffSimDf,aes(meanDiffSim)) +
+  geom_histogram(aes(y=..density..),bins=100) +
+  geom_vline(aes(xintercept=meanDiff),color='blue') +
+  xlab('T stat: BMI difference between groups') + xlim(-4,4) +
+  geom_line(data=data.frame(tdist=tdist,x=x),aes(x,tdist),color='red',size=2)
+ 
+dtfun=function(x){
+  return(dt(x,248))
+}
+ggplot(meanDiffSimDf,aes(meanDiffSim)) +
+  geom_vline(aes(xintercept=meanDiff),color='blue') +
+  xlab('T stat: BMI difference between groups') + xlim(-4,4) +
+  geom_line(data=data.frame(tdist=tdist,x=x),aes(x,tdist),color='red',size=2) +
+  stat_function(fun = dtfun, 
+                xlim = c(meanDiff[1,1],4),
+                geom = "area",fill='orange') 
+
+ 
+
+```
+
+We can also plot the cumulative distributions against one another.
+
+```{r}
+ggplot(meanDiffSimDf,aes(meanDiffSim)) +
+  stat_ecdf(aes(color='black')) + 
+  geom_step(data=data.frame(tdist=cumsum(tdist)/sum(tdist),x=x),
+            aes(x,tdist,color='green'),linetype='dashed') + 
+  xlab('T stat: BMI difference between groups') + xlim(-4,4) +
+  geom_vline(aes(xintercept=meanDiff,color='blue')) +
+  scale_color_manual(values=c('black','blue','green'),labels = c("T distribution", "Observed","Permutation")) 
+```
+
+
+We can compute the likelihood of the observed result under the null hypothesis, first using the theoretical t distribution.   To do this, we need to determine the probability of finding a value as large or larger than the observed value under this distribution.  To do this, we can use the pt() function which determines the cumulative probability of a particular value of the t distribution given a certain number of degrees of freedom.  In this case, we use df=248 since there are 250 observations and we are estimating two parameters (the means of each group).
+
+We will just keep it easy and compute the t statistic using the built in t.test() function.
+
+```{r}
+ttestResult = t.test(NHANES_sample$BMI[NHANES_sample$PhysActive=='No'],NHANES_sample$BMI[NHANES_sample$PhysActive=='Yes'],var.equal=TRUE,alternative='greater')
+print(ttestResult)
+lowerpt=pt(ttestResult$statistic,sampSize-2)
+print(paste('lower tail probability (t distribution):',lowerpt[1]))
+
+```
+
+Since the total probability sums to 1, the probabilty of a value larger than our observed value is simply one minus the lower tail probability:
+
+```{r}
+upperpt=1 - lowerpt
+print(paste('upper tail probability (t distribution):',upperpt[1]))
+
+```
+
+Let's compare that to the probability of finding a value as large as or larger than the observed value in the distribution of permutation results.
+
+```{r}
+print(paste('Number of',nSamples,'permutations equal to or greater than t =',
+            ttestResult$statistic,':',
+            sum(meanDiffSim>=ttestResult$statistic )))
+upperpPerm=mean(meanDiffSim>=ttestResult$statistic )
+print(paste('upper tail probability (permutation distribution):',upperpPerm[1]))
+
+```
+
+What happens if we rerun the test as a two-tailed (non-directional) test?
+
+```{r}
+ttestResult = t.test(NHANES_sample$BMI[NHANES_sample$PhysActive=='No'],NHANES_sample$BMI[NHANES_sample$PhysActive=='Yes'],var.equal=TRUE)
+print(ttestResult)
+
+```
+
+#### Neyman-Pearson
+
+Let's simulate a situation in order to see how the different aspects of the Neyman-Pearson approach work together.
+
+Let's simulate performance from two groups of subjects (say, Californians and Texans) on a test of marijuana sensitivity, which has a mean of 10 and a standard deviation of 1. We will start by simulating a dataset where the is no true difference.  
+
+Because we will want to reuse this simulation, let's first create a function that performs the simulation.
+
+```{r}
+
+runSimulation=function(trueDifference,nPerGroup,alpha=0.05,nSims=5000,
+                       print.output=FALSE){
+  pVals=array(NA,nSims)
+  for (i in 1:nSims){
+    simData_CA=rnorm(nPerGroup,mean=10,sd=1)
+    simData_TX=rnorm(nPerGroup,mean=10+trueDifference,sd=1)
+    t.result=t.test(simData_CA,simData_TX,var.equal=TRUE)
+    pVals[i]=t.result$p.value
+  }
+  if (print.output){
+    print(paste('proportion of significant results (over',
+              nSims,'simulations):',mean(pVals<=alpha)))
+  }
+  return(mean(pVals<=alpha))
+}
+
+nPerGroup=20
+trueDifference=0
+sim.out=runSimulation(trueDifference,nPerGroup,print.output=TRUE)
+```
+
+You can see that over many simulations, the probability of finding a significant result (which is a false positive, since there is no true difference) is very close to alpha.
+
+Now let's see what happens when there truly is a difference between the groups.  First let's assume that it's a really large difference. 
+
+```{r}
+nPerGroup=20
+trueDifference=1
+sim.out=runSimulation(trueDifference,nPerGroup,print.output=TRUE)
+
+```
+
+When the effect is large (in this case it's 1 standard deviation, which is a pretty large effect) then we will reject the null hypothesis most of the time - but not all of the time.
+
+Let's see how the likelihood of finding a significant result changes as a function of the size of the effect. 
+
+```{r}
+trueDifferences=seq(0,2,0.1)
+proportionSignificant=array(NA,length(trueDifferences))
+for (i in 1:length(trueDifferences)){
+  proportionSignificant[i]=runSimulation(trueDifferences[i],nPerGroup)
+}
+```
+
+```{r}
+ggplot(data.frame(trueDiff=trueDifferences,propSig=proportionSignificant),
+       aes(trueDiff,propSig)) +
+  geom_line() +
+  xlab('Size of true effect (in SD units)') + ylab('Proportion of significant tests') +
+  geom_hline(yintercept = 0.05,linetype='dashed')
+```
+
+What do you think happens if we increase the sample size? Let's try it with several different sample sizes to see what effect that has. This could take a couple of minutes to complete.
+
+```{r}
+trueDifferences=seq(0,2,0.2)
+sampleSizes=c(20,40,60,80)
+proportionSignificant=array(NA,length(sampleSizes)*length(trueDifferences))
+sampleSize=array(NA,length(sampleSizes)*length(trueDifferences))
+trueDifference=array(NA,length(sampleSizes)*length(trueDifferences))
+i=1
+for (td in trueDifferences){
+  for (ss in sampleSizes) {
+    sampleSize[i]=ss
+    trueDifference[i]=td
+    proportionSignificant[i]=runSimulation(td,ss)
+    i=i+1
+  }
+}
+```
+
+```{r}
+df=data.frame(trueDiff=trueDifference,propSig=proportionSignificant,sampleSize=as.factor(sampleSize))
+ggplot(df,aes(trueDiff,propSig,color=sampleSize)) +
+  geom_line(size=1.25) +
+  xlab('Size of true effect (in SD units)') + ylab('Proportion of significant tests') +
+  geom_hline(yintercept = 0.05,linetype='dashed')
+
+```
+
+What about changing alpha?  What effect does that have on power?  Let's vary alpha while holding sample size constant at 40.
+
+```{r}
+trueDifferences=seq(0,2,0.2)
+sampleSize=40
+alphas=c(0.001,0.005,0.01,0.05,0.1)
+proportionSignificant=array(NA,length(alphas)*length(trueDifferences))
+alpha=array(NA,length(alphas)*length(trueDifferences))
+trueDifference=array(NA,length(alphas)*length(trueDifferences))
+i=1
+for (td in trueDifferences){
+  for (a in alphas) {
+    alpha[i]=a
+    trueDifference[i]=td
+    proportionSignificant[i]=runSimulation(td,ss,alpha=a)
+    i=i+1
+  }
+}
+
+```
+
+```{r}
+df=data.frame(trueDiff=trueDifference,propSig=proportionSignificant,alpha=as.factor(alpha))
+ggplot(df,aes(trueDiff,propSig,color=alpha)) +
+  geom_line(size=1.25) +
+  xlab('Size of true effect (in SD units)') + ylab('Proportion of significant tests')
+```
+
+Let's see what happens with a really small effect as the sample size gets large.  This could take a few minutes.
+
+```{r}
+sampleSizes=2**seq(4,18)
+proportionSignificant=array(NA,length(sampleSizes))
+for (i in 1:length(sampleSizes)){
+  proportionSignificant[i]=runSimulation(0.01,sampleSizes[i])
+}
+```
+
+```{r}
+df=data.frame(sampleSize=sampleSizes,propSig=proportionSignificant)
+ggplot(df,
+       aes(sampleSize,propSig)) +
+  geom_line() + ylim(0,1) + scale_x_log10() +
+  xlab('log Sample size') + ylab('Proportion of significant tests') +
+  geom_hline(yintercept = 0.05,linetype='dashed')
+
+
+print(df)
+```
+
+### Positive predictive value
+
+The positive predictive value is the proportion of positive outcomes (i.e. rejection of the null) that are correct.  This moves with three things:
+- alpha (false positive rate)
+- power (1 - false negative rate)
+- prior probability that the hypothesis is correct
+
+Let's plot an example
+
+```{r}
+
+ppv = function(alpha,power,prior){
+  return ((power*prior)/(power*prior + alpha))
+}
+powerVals=c(0.1,0.5,0.8,0.9)
+priorVals=seq(0.1,1,0.1)
+ppvVal=array(NA,length(powerVals)*length(priorVals))
+i=1
+powerVal=array(NA,length(powerVals)*length(priorVals))
+priorVal=array(NA,length(powerVals)*length(priorVals))
+
+for (pwr in powerVals){
+  for (prior in priorVals){
+    ppvVal[i]=ppv(0.05,pwr,prior)
+    powerVal[i]=pwr
+    priorVal[i]=prior
+    i=i+1
+  }
+}
+
+df=data.frame(ppv=ppvVal,fdr=1-ppvVal,prior=priorVal,power=as.factor(powerVal))
+
+ggplot(df,aes(priorVal,ppv,color=power)) +
+  geom_line(size=1.5) + ylab('Positive Predictive Value') +
+  xlab('Prior probability of true effect') + ylim(0,1)
+ggplot(df,aes(priorVal,fdr,color=power)) +
+  geom_line(size=1.5) + ylab('False discovery rate') +
+  xlab('Prior probability of true effect') + ylim(0,1)
+
+
+```
