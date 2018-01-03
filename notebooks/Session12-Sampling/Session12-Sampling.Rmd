@@ -1,0 +1,180 @@
+---
+title: 'Session 12: Sampling'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+Let's start by looking at the height of adults in NHANES, to explore the use of sampling. We will assume that our population of interest is all adults in NHANES, and we will examine how well different estimators work in terms of our two criteria: bias and variance.
+
+
+```{r}
+library(NHANES)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+
+options(scipen = 999)  # turn off scientific notation
+
+NHANES$isChild <- NHANES$Age<18
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
+
+print(paste('Population height: mean = ',mean(NHANES_adult$Height)))
+print(paste('Population height: std deviation = ',sd(NHANES_adult$Height)))
+
+
+```
+
+Now let's take a bunch of samples of 100 individuals, compute the mean, and look at the distribution of those values (which we call the "sampling distribtion").
+
+We have to decide how many samples to take in order to do a good job of estimating the sampling distribution.  Let's take 5000 samples so that we are really confident in the answer. This might take a moment....
+
+```{r}
+sampSize=100
+nsamps=5000
+sampMeans=array(NA,nsamps)
+sampMeansTrimmed=array(NA,nsamps)
+sampMedians=array(NA,nsamps)
+sampMidpoints=array(NA,nsamps)
+sampMeanSE=array(NA,nsamps)
+
+for (i in 1:nsamps){
+  NHANES_sample=sample_n(NHANES_adult,sampSize)
+  sampMeans[i]=mean(NHANES_sample$Height)
+  sampMeanSE[i]=sd(NHANES_sample$Height)/sqrt(sampSize)
+  sampMeansTrimmed[i]=mean(NHANES_sample$Height,trim=0.1)
+  sampMedians[i]=median(NHANES_sample$Height)
+  sampMidpoints[i]=min(NHANES_sample$Height) + (max(NHANES_sample$Height) -min(NHANES_sample$Height))/2
+
+}
+
+sampdataDf=data.frame(mean=sampMeans,meanTrimmed=sampMeansTrimmed,
+                      median=sampMedians,midpoint=sampMidpoints,
+                      se_mean=sampMeanSE)
+
+print(paste('Average sample mean =',mean(sampMeans)))
+print(paste('Standard deviation of sample means =',sd(sampMeans)))
+print(paste('Estimated standard error based on population SD:',sd(NHANES_adult$Height)/sqrt(sampSize)))
+sampMeans_df=data.frame(sampMeans=sampMeans)
+
+ggplot(sampMeans_df,aes(sampMeans)) +
+  geom_histogram(data=NHANES_adult,aes(Height,..density..),bins=500,col='gray',fill='gray') +
+  geom_histogram(aes(y=..density..*0.2),bins=500,col='blue',fill='blue') +
+  xlab('Height (inches)') 
+```
+
+Now let's see if the sample mean is really the "best" estimator of the population mean.  
+
+First, let's see if it really is less biased than the other estimators (median and trimmed mean).
+
+```{r}
+sampdataLongDf=gather(sampdataDf)
+sampdataGrouped <- group_by(sampdataLongDf, key) %>% filter(key != 'se_mean') %>% summarise(mean=mean(value),sd=sd(value))
+
+ggplot(sampdataGrouped, aes(x=key,y=mean)) + 
+  geom_point(stat="identity") +
+  geom_hline(yintercept=mean(NHANES_adult$Height)) +
+  xlab('summary measure') + ylab('estimate')
+
+```
+
+
+Now let's see whether the mean also has the lowest variance compared to the other estimators.
+
+```{r}
+ggplot(sampdataGrouped, aes(x=key,y=sd)) + 
+  geom_point(stat="identity") +
+  geom_hline(yintercept = sd(NHANES_adult$Height)/sqrt(sampSize)) +
+  xlab('summary measure') + ylab('standard deviation of estimates')
+
+```
+
+### Central limit theorem
+
+The CLT tells us that parameter estimates from any distribution will be normally distributed, assuming that the sample size is large enough.
+
+To test this, let's work with the data from all individuals in the NHANES dataset, which is highly skewed.  Let's take a bunch of samples from this distribution, and then look at the shape of the sampling distribution of the mean.
+
+```{r}
+
+sampSize=100
+nsamps=5000
+sampMeansFull=array(NA,nsamps)
+
+for (i in 1:nsamps){
+  NHANES_sample=sample_n(NHANES,sampSize)
+  sampMeansFull[i]=mean(NHANES_sample$Height)
+
+}
+sampMeansFullDf=data.frame(sampMeans=sampMeansFull)
+
+ggplot(sampMeansFullDf,aes(sampMeans)) +
+  geom_histogram(data=NHANES,aes(Height,..density..),bins=500,col='gray',fill='gray') +
+  geom_histogram(aes(y=..density..*0.2),bins=500,col='blue',fill='blue') +
+  xlab('Height (inches)') 
+
+```
+
+How big is large enough?  Try out the demo (clt_demo under psych10-shinyapps).
+
+
+### Confidence intervals
+
+The confidence interval around an estimate provides us with an interval that should capture the true population value 95% of the time.
+
+We can use the data from our earlier simulations to examine this.
+
+```{r}
+
+meandataDf=subset(sampdataDf,select=c('mean','se_mean'))
+meandataDf$upperci=meandataDf$mean+1.96*meandataDf$se_mean
+meandataDf$lowerci=meandataDf$mean-1.96*meandataDf$se_mean
+
+meandataDf$capture=(mean(NHANES_adult$Height)>meandataDf$lowerci)&(mean(NHANES_adult$Height)<meandataDf$upperci)
+
+print(paste('Proportion of confidence intervals that capture the population mean:',mean(meandataDf$capture)))
+
+```
+
+### Inferential statistics
+
+Our ultimate interest is often to determine whether two groups differ from one another on some feature.  We can use inferential statistics to do this.
+
+We will use NHANES for this as well, but now we are going to treat the NHANES data as a sample from the larger US population, rather than treating it as a population in its own right. 
+
+Let's ask a question where we are pretty sure that we already know the answer: Are adult men taller than adult women on average?
+
+```{r}
+
+ggplot(NHANES_adult,aes(Gender, Height)) +
+  geom_violin()
+meandiff=mean(NHANES_adult$Height[NHANES_adult$Gender=='male']) - mean(NHANES_adult$Height[NHANES_adult$Gender=='female'])
+print(paste('mean difference in height between men and women:',round(meandiff,digits=1),'inches'))
+shortestMan=min(NHANES_adult$Height[NHANES_adult$Gender=='male'])
+tallestWoman=max(NHANES_adult$Height[NHANES_adult$Gender=='female'])
+
+print(paste('Percentage of women taller than the shortest man:',mean(NHANES_adult$Height[NHANES_adult$Gender=='female']>shortestMan)))
+print(paste('Percentage of men shorter than the tallest woman:',mean(NHANES_adult$Height[NHANES_adult$Gender=='male']<tallestWoman)))
+
+```
+
+The plot seems to confirm our prior hypothesis: Men are on average taller than women, by a little over one foot.  But there is also a lot of overlap:  Most women are taller than the shortest man, and most men and shorter than the tallest woman.  So how can we decide whether there is really a difference?
+
+One way we can try to test this is to compare the confidence intervals for the two groups.
+
+```{r}
+heightDf=group_by(NHANES_adult, Gender) %>% summarise(mean=mean(Height),sd=sd(Height),n=length(Height))
+heightDf$se=heightDf$sd/sqrt(heightDf$n)
+heightDf$upperCI=heightDf$mean + heightDf$se*1.96
+heightDf$lowerCI=heightDf$mean - heightDf$se*1.96
+
+ggplot(heightDf,aes(Gender, mean)) +
+  geom_violin(data=NHANES_adult,aes(Gender,Height)) + 
+  geom_errorbar(aes(ymin=lowerCI,ymax=upperCI))
+
+print(heightDf)
+```
+
+The mean for the women is outside of the confidence interval for men; we would only expect this to happen 1 in 20 times if that confidence interval captured the true population for women, which gives us fairly good evidence that the means for men and women are different.  We will return to this when we come to hypothesis testing later in the course.
