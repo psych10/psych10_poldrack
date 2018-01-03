@@ -1,0 +1,310 @@
+---
+title: 'Session 7: Z-scores'
+output:
+  html_document:
+    df_print: paged
+---
+
+### How safe is California?
+
+Let's ask this question using data for 2014 from the FBI's Uniform Crime Reporting site (https://www.ucrdatatool.gov/Search/Crime/State/RunCrimeOneYearofData.cfm).
+
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(mapproj)
+library(fiftystater)
+library(cowplot)
+
+crimeData=read.table('CrimeOneYearofData_clean.csv',header=TRUE,sep=',')
+# let's drop DC since it is so small
+crimeData=subset(crimeData,State!='District of Columbia')
+caCrimeData=subset(crimeData,State=="California")
+```
+
+Let's look at the histogram of the number of violent crimes.  The value for CA is plotted in blue.
+
+```{r}
+ggplot(crimeData,aes(Violent.crime.total)) +
+  geom_histogram(bins=25) + geom_vline(xintercept = caCrimeData$Violent.crime.total,color='blue') + xlab('Number of violent crimes in 2014')
+print(paste('number of 2014 violent crimes in CA:',caCrimeData$Violent.crime.total))
+```
+California leads the list, which we can also see if we map the data geographically.
+
+With R it's also easy to generate a map showing the distribution of a variable across states.
+(Adapted from https://cran.r-project.org/web/packages/fiftystater/vignettes/fiftystater.html)
+```{r}
+
+data("fifty_states") # this line is optional due to lazy data loading
+crimeData$StateLower=tolower(crimeData$State)
+# map_id creates the aesthetic mapping to the state name column in your data
+p <- ggplot(crimeData, aes(map_id = StateLower)) + 
+  # map points to the fifty_states shape data
+  geom_map(aes(fill = Violent.crime.total), map = fifty_states) + 
+  expand_limits(x = fifty_states$long, y = fifty_states$lat) +
+  coord_map() +
+  scale_x_continuous(breaks = NULL) + 
+  scale_y_continuous(breaks = NULL) +
+  labs(x = "", y = "") +
+  theme(legend.position = "bottom", 
+        panel.background = element_blank())
+
+# add border boxes to AK/HI
+p + fifty_states_inset_boxes() 
+```
+
+
+
+But wait, CA also has the largest population of any state in the US, so it's reasonable that it will also have more crimes.  Let's plot the two against one another.
+
+```{r}
+ggplot(crimeData,aes(Population,Violent.crime.total)) +
+  geom_point() + ylab('Number of violent crimes in 2014') +
+    annotate('point',x=caCrimeData$Population,y=caCrimeData$Violent.crime.total,
+           color='blue')
+
+```
+We can correct for this by computing a per-capita violent crime rate, by dividing the number of crimes by the population of the state.  The dataset from the FBI already includes this value (expressed as rate per 100,000 people).
+
+```{r}
+ggplot(crimeData,aes(Violent.Crime.rate)) +
+  geom_histogram(binwidth=80) + geom_vline(xintercept = caCrimeData$Violent.Crime.rate,color='blue') + xlab('Rate of violent crimes per 100,000 people')
+print(paste('rate of 2014 violent crimes in CA:',caCrimeData$Violent.Crime.rate))
+print(paste('mean rate:',mean(crimeData$Violent.Crime.rate)))
+print(paste('std of rate:',sd(crimeData$Violent.Crime.rate)))
+
+```
+
+#### Creating Z-scores
+
+First let's look at Z-scores abstractly.  To make this easier, we can create a function that plots the density and cumulative distribution function next to one another.
+
+```{r}
+
+dnormfun=function(x){
+  return(dnorm(x,248))
+}
+
+plot_density_and_cdf = function(zcut,zmin=-4,zmax=4,plot_cdf=TRUE,zmean=0,zsd=1) {
+  zmin=zmin*zsd + zmean
+  zmax=zmax*zsd + zmean
+  x=seq(zmin,zmax,0.1*zsd)
+  zdist=dnorm(x,mean=zmean,sd=zsd)
+  area=pnorm(zcut) - pnorm(-zcut)
+
+  p2=ggplot(data.frame(zdist=zdist,x=x),aes(x,zdist)) +
+    xlab('Z score') + xlim(zmin,zmax) + ylab('density')+
+    geom_line(aes(x,zdist),color='red',size=2) +
+    stat_function(fun = dnorm, args=list(mean=zmean,sd=zsd),
+                  xlim = c(zmean -zcut*zsd,zmean + zsd*zcut),
+                  geom = "area",fill='orange')  +
+    stat_function(fun = dnorm, args=list(mean=zmean,sd=zsd),
+                  xlim = c(zmin,zmean -zcut*zsd),
+                  geom = "area",fill='green')  +
+    stat_function(fun = dnorm, args=list(mean=zmean,sd=zsd),
+                  xlim = c(zmean +zcut*zsd,zmax),
+                  geom = "area",fill='green')  +
+    annotate('text',x=zmean,
+             y=dnorm(zmean,mean=zmean,sd=zsd)/2,
+             label=sprintf('%0.1f%%',area*100))  +
+    annotate('text',x=zmean - zsd*zcut-0.5*zsd,
+             y=dnorm(zmean-zcut*zsd,mean=zmean,sd=zsd)+0.01/zsd,
+             label=sprintf('%0.1f%%',pnorm(zmean - zsd*zcut,mean=zmean,sd=zsd)*100))  +
+    annotate('text',x=zmean + zsd*zcut+0.5*zsd,
+             y=dnorm(zmean-zcut*zsd,mean=zmean,sd=zsd)+0.01/zsd,
+             label=sprintf('%0.1f%%',(1-pnorm(zmean + zsd*zcut,mean=zmean,sd=zsd))*100)) 
+  
+  if (plot_cdf) {
+    cdf2=ggplot(data.frame(zdist=zdist,x=x,zcdf=pnorm(x,mean=zmean,sd=zsd)),aes(x,zcdf)) +
+      geom_line() + ylab('Cumulative density') +
+      annotate('segment',x=zmin,xend=zmean+zsd*zcut,
+               y=pnorm(zmean + zsd*zcut,mean=zmean,sd=zsd),
+               yend=pnorm(zmean + zsd*zcut,mean=zmean,sd=zsd),
+               color='red',linetype='dashed') +
+      annotate('segment',x=zmean+zsd*zcut,xend=zmean+zsd*zcut,
+               y=0,yend=pnorm(zmean + zsd*zcut,mean=zmean,sd=zsd),
+               color='red',linetype='dashed')+
+      annotate('segment',x=zmin,xend=zmean-zcut*zsd,
+               y=pnorm(zmean-zcut*zsd,mean=zmean,sd=zsd),
+               yend=pnorm(zmean-zcut*zsd,mean=zmean,sd=zsd),
+               color='blue',linetype='dashed') +
+      annotate('segment',x=zmean-zcut*zsd,xend=zmean-zcut*zsd,
+               y=0,yend=pnorm(zmean-zcut*zsd,mean=zmean,sd=zsd),
+               color='blue',linetype='dashed')
+
+    plot_grid(p2,cdf2,nrow=2)
+  } else {
+    print(p2)
+  }
+}
+plot_density_and_cdf(1)
+plot_density_and_cdf(1,zmean=100,zsd=10)
+
+
+```
+
+Plot various points in the CDF.
+```{r}
+zmean=0
+zsd=1
+zmin=-4*zsd + zmean
+zmax=4*zsd + zmean
+x=seq(zmin,zmax,0.1*zsd)
+zdist=dnorm(x,mean=zmean,sd=zsd)
+points_to_plot=seq(-2,2,1)
+
+cdf2=ggplot(data.frame(zdist=zdist,x=x,zcdf=pnorm(x,mean=zmean,sd=zsd)),aes(x,zcdf)) +
+    geom_line() + ylab('Cumulative density')
+
+
+for (p in points_to_plot){
+  cdf2 = cdf2 + annotate('segment',x=zmin,xend=zmean+zsd*p,
+             y=pnorm(zmean + zsd*p,mean=zmean,sd=zsd),
+             yend=pnorm(zmean + zsd*p,mean=zmean,sd=zsd),
+             color='red',linetype='dashed') +
+    annotate('segment',x=zmean+zsd*p,xend=zmean+zsd*p,
+             y=0,
+             yend=pnorm(zmean + zsd*p,mean=zmean,sd=zsd),
+             color='red',linetype='dashed') +
+    annotate('text',label=sprintf('%0.1f%%',(pnorm(zmean + zsd*p,mean=zmean,sd=zsd))*100),
+             x=p+.5*zsd,y=pnorm(zmean + zsd*p,mean=zmean,sd=zsd)*0.95)
+}
+print(cdf2)
+
+```
+
+We can create Z-scores for violent crime rates by subtracting the mean and dividing by the standard deviation.
+
+```{r}
+crimeData$ViolentCrimeRateZscore=(crimeData$Violent.Crime.rate - mean(crimeData$Violent.Crime.rate))/sd(crimeData$Violent.Crime.rate)
+caCrimeData=subset(crimeData,State=="California")
+
+print(paste('mean of Z-scored data:',mean(crimeData$ViolentCrimeRateZscore)))
+print(paste('std deviation of Z-scored data:',sd(crimeData$ViolentCrimeRateZscore)))
+
+ggplot(crimeData,aes(Violent.Crime.rate,ViolentCrimeRateZscore)) +
+  geom_point() + xlab('Rate of violent crimes') + ylab('Z-scored rate of violent crimes')
+```
+
+A slight aside: Why is the mean not zero?  It turns out that this is due to the fact that R (like any computer program) represents numbers using floating point numbers that have a limited amount of precision.  Let's see what the largest and smallest numbers are than R can represent:
+
+```{r}
+print(paste("smallest number such that 1+x != 1",.Machine$double.eps))
+print((1+.Machine$double.eps)==1)
+print((1+.Machine$double.eps/2)==1)
+
+print(paste("largest number",.Machine$double.xmax))
+print((1+.Machine$double.xmax)==.Machine$double.xmax)
+
+```
+
+Now let's plot the histogram of the Z-scores
+
+```{r}
+
+ggplot(crimeData,aes(ViolentCrimeRateZscore)) +
+  geom_histogram(binwidth=0.5) + geom_vline(xintercept = caCrimeData$ViolentCrimeRateZscore,color='blue')
+
+```
+
+This histogram looks very similar the one above based on the raw scores; why do they look slightly different, when the book says that they should look exactly the same?
+
+Let's say that instead of Z-scores, we wanted to generate standardized crime scores with a mean of 100 and standard deviation of 10.  We can do that by simply multiplying the Z-scores by 10 and then adding 100.
+
+```{r}
+crimeData$ViolentCrimeRateStdScore=(crimeData$ViolentCrimeRateZscore)*10  + 100
+
+caCrimeData=subset(crimeData,State=="California")
+
+print(paste('mean of standardized score data:',mean(crimeData$ViolentCrimeRateStdScore)))
+print(paste('std deviation of standardized score data:',sd(crimeData$ViolentCrimeRateStdScore)))
+
+ggplot(crimeData,aes(ViolentCrimeRateStdScore)) +
+  geom_histogram(binwidth=5) + geom_vline(xintercept = caCrimeData$ViolentCrimeRateStdScore,color='blue')
+
+```
+
+
+Let's show a table with the states sorted by their z-score
+
+```{r}
+crimeDataSorted=crimeData[order(crimeData$ViolentCrimeRateZscore),] %>% subset(select=c('State',"ViolentCrimeRateZscore"))
+print(crimeDataSorted)
+```
+
+Looking at these data, we see that CA falls close to the middle of the pack in terms of its violent crime rate.  We can also see this using a geographical map.
+```{r}
+
+data("fifty_states") # this line is optional due to lazy data loading
+crimeData$StateLower=tolower(crimeData$State)
+# map_id creates the aesthetic mapping to the state name column in your data
+p <- ggplot(crimeData, aes(map_id = StateLower)) + 
+  # map points to the fifty_states shape data
+  geom_map(aes(fill = ViolentCrimeRateZscore), map = fifty_states) + 
+  expand_limits(x = fifty_states$long, y = fifty_states$lat) +
+  coord_map() +
+  scale_x_continuous(breaks = NULL) + 
+  scale_y_continuous(breaks = NULL) +
+  labs(x = "", y = "") +
+  theme(legend.position = "bottom", 
+        panel.background = element_blank())
+
+p
+# add border boxes to AK/HI
+p + fifty_states_inset_boxes() 
+```
+
+#### Using Z-scores to compare distributions
+
+Let's say that we want to compare the distributions of violent and property crimes across states.  First let's plot those against one another, with CA plotted in blue.
+
+```{r}
+ggplot(crimeData,aes(Violent.Crime.rate,Property.crime.rate)) +
+  geom_point() + 
+  annotate('point',x=caCrimeData$Violent.Crime.rate,y=caCrimeData$Property.crime.rate,
+           color='blue') + xlab('Violent crime rate (per 100,000)') +
+          ylab('Property crime rate (per 100,000)')
+```
+
+As you can see the rates of property crimes are far higher than the rates of violent crimes, so we can't just compare the numbers directly.  We can plot the Z-scores for these data against one another - here again we see that the distribution of the data does not change.
+
+```{r}
+crimeData$PropertyCrimeRateZscore=(crimeData$Property.crime.rate - mean(crimeData$Property.crime.rate))/sd(crimeData$Property.crime.rate)
+caCrimeData=subset(crimeData,State=="California")
+
+ggplot(crimeData,aes(ViolentCrimeRateZscore,PropertyCrimeRateZscore)) +
+  geom_point() + 
+  annotate('point',x=caCrimeData$ViolentCrimeRateZscore,y=caCrimeData$PropertyCrimeRateZscore,
+           color='blue')
+
+```
+
+
+What does this plot tell you about the crime rate of the state of California?
+
+Let's add one more factor to the plot: Population.
+
+```{r}
+ggplot(crimeData,aes(ViolentCrimeRateZscore,PropertyCrimeRateZscore)) +
+  geom_point(aes(size=Population)) + 
+  annotate('point',x=caCrimeData$ViolentCrimeRateZscore,y=caCrimeData$PropertyCrimeRateZscore,
+           color='blue')
+
+```
+
+Because Z-scores are directly comparable, we can compute a "Violence difference" that expresses the relative rate of violent to non-violent crimes across states.  What do you think the distribution of those scores will look like?
+
+```{r}
+crimeData$ViolenceDiff=crimeData$ViolentCrimeRateZscore-crimeData$PropertyCrimeRateZscore
+
+ggplot(crimeData,aes(ViolenceDiff)) +
+  geom_histogram(bins=20)
+
+ggplot(crimeData,aes(Population,ViolenceDiff)) +
+  geom_point() + ylab('Violence difference')
+```
+
+The smallest states appear to have the largest differences in both directions - why would that be?
+
+
