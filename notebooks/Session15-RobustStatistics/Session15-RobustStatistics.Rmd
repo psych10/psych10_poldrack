@@ -1,0 +1,155 @@
+---
+title: 'Session 15: Robust Statistics'
+output:
+  html_document:
+    df_print: paged
+---
+
+In this session we examine the effects of outliers and how to fix them.  Let's use a sample of 100 individuals from the NHANES adult height data, but alter it so that there is an outlier; let's pretend that height for one of the individuals was accidentally measured in millimeters rather than inches.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(NHANES)
+sampSize=100
+
+NHANES$isChild <- NHANES$Age<18
+NHANES_adult=sample_n(subset(NHANES,select=c('Height'),subset=!isChild & Height!='NA'),sampSize)
+NHANES_outlier=NHANES_adult
+NHANES_outlier[1,1]=NHANES_outlier[1,1]*2.54
+
+ggplot(NHANES_outlier,aes(Height)) +
+  geom_histogram(bins=30)
+
+```
+
+Now let's see how the various measures of central tendency are affected by the outlier.
+
+```{r}
+summaryData=rbind(summarise(NHANES_adult,label='Original',mean=mean(Height),sd=sd(Height),median=median(Height)),
+              summarise(NHANES_outlier,label='Outlier',mean=mean(Height),sd=sd(Height),median=median(Height)))
+print(summaryData)
+```
+
+To see the effects across many possible samples, let's take 100 samples and compute a number of different measures of central tendency and dispersion with the outlier versus the original sample.
+
+```{r}
+library(boot)
+library(MASS)
+
+# we need this to use the boot package bootstrap function
+samplemean <- function(x, d) {
+  return(mean(x[d]))
+}
+
+getSample=function() {
+  NHANES$isChild <- NHANES$Age<18
+  NHANES_sample=sample_n(subset(NHANES,select=c('Height'),subset=!isChild & Height!='NA'),sampSize)
+  NHANES_sample['HeightOutlier']=NHANES_sample$Height
+  NHANES_sample$HeightOutlier[1]=NHANES_sample$HeightOutlier[1]*2.54
+  return(NHANES_sample)
+}
+
+nSamples=100
+sampleData=c()
+for (i in 1:nSamples){
+  s=getSample()
+  bootResult=boot(s$Height, samplemean, R=1000)
+  bootOutlierResult=boot(s$HeightOutlier, samplemean, R=1000)
+  huberEst=huber(s$Height)
+  huberEstOutlier=huber(s$HeightOutlier)
+  results=cbind(summarise(s,mean=mean(Height),median=median(Height),
+                        trimmedMean=mean(Height,trim=0.1),
+                        bootMean=mean(bootResult$t),bootSd=sd(bootResult$t),
+                        sd=sd(Height),mad=mad(Height),huberMean=huberEst$mu,
+                        huberMAD=huberEst$s),
+                summarise(s,meanOutlier=mean(HeightOutlier),
+                        medianOutlier=median(HeightOutlier),
+                        trimmedMeanOutlier=mean(HeightOutlier,trim=0.1),
+                        bootMeanOutlier=mean(bootOutlierResult$t),
+                        bootSdOutlier=sd(bootOutlierResult$t),
+                        sdOutlier=sd(HeightOutlier),
+                        madOutlier=mad(HeightOutlier),
+                        huberMeanOutlier=huberEstOutlier$mu,
+                        huberMADOutlier=huberEstOutlier$s))
+  
+  sampleData=rbind(sampleData,results)
+}
+
+
+```
+
+Plot the results against one another
+
+```{r}
+ggplot(sampleData,aes(mean,meanOutlier,color='mean')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  xlim(165,175) +
+  ylim(165,175) + 
+  geom_point(aes(median,medianOutlier,color='median'),alpha=0.5) +
+  geom_point(aes(trimmedMean,trimmedMeanOutlier,color='trimmedMean'),alpha=0.5) +
+  xlab('Original data') + ylab('With outlier')
+
+```
+
+Can bootstrapping help with outliers?
+
+```{r}
+ggplot(sampleData,aes(mean,bootMeanOutlier,color='mean')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  xlim(165,175) +
+  ylim(165,175) + 
+  xlab('Original data') + ylab('With outlier')
+
+```
+
+What about using an M-estimator?
+
+```{r}
+ggplot(sampleData,aes(mean,huberMeanOutlier,color='Huber M-estimate')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  xlim(165,175) +
+  ylim(165,175) + 
+  xlab('Original data') + ylab('With outlier')
+
+```
+
+We can also look at the effect of outliers on estimates of dispersion.
+
+```{r}
+ggplot(sampleData,aes(sd,sdOutlier,color='std deviation')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  geom_point(aes(mad,madOutlier,color='MAD'),alpha=0.5) +
+  xlab('Original data') + ylab('With outlier')
+
+```
+
+What about bootstrapping?
+
+
+```{r}
+sampleData['se']=sampleData$sd/sqrt(nSamples)
+sampleData['seOutlier']=sampleData$sdOutlier/sqrt(nSamples)
+ggplot(sampleData,aes(bootSd,bootSdOutlier,color='bootstrapped std error')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  geom_point(aes(se,seOutlier,color='std error'),alpha=0.5) +
+  xlab('Original data') + ylab('With outlier') +
+  xlim(0,4) + ylim(0,4)
+
+```
+
+And the M-estimator?
+```{r}
+ggplot(sampleData,aes(huberMAD,huberMADOutlier,color='Huber M-estimator MAD')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  xlab('Original data') + ylab('With outlier')
+
+```
+
