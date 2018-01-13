@@ -1,20 +1,29 @@
 ---
-title: 'Lecture 4: Statistical models'
+title: 'Session 5: Statistical models'
 output:
   html_document:
     df_print: paged
 ---
 
-Let's start by looking at the height of children in NHANES.
-
-```{r}
+```{r echo=FALSE,message=FALSE}
 library(NHANES)
 library(ggplot2)
 library(dplyr)
+library(readr) # CSV file I/O, e.g. the read_csv function
+library(stringr)
+```
+
+#### Modeling example
+
+Let's start by looking at the height of children in NHANES.
+
+```{r}
+
 
 NHANES$isChild <- NHANES$Age<18
 
 NHANES_child=subset(NHANES,subset=isChild & Height!='NA')
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
 
 ggplot(data=NHANES_child,aes(Height)) + 
   geom_histogram(bins=100)
@@ -133,12 +142,33 @@ We can also plot the average squared error for the four different models.
 error_df=data.frame(error=c(mean(error**2),mean(error_mean**2),
                             mean(error_age**2),mean(error_age_gender**2)))
 row.names(error_df)=c('mode','mean','age','age+gender')
-ggplot(error_df,aes(x=row.names(error_df),y=error)) + 
-  geom_col() + 
-  ylab('average squared error') + xlab('Model')
+error_df$RMSE=sqrt(error_df$error)
+ggplot(error_df,aes(x=row.names(error_df),y=RMSE)) + 
+  geom_col() +ylab('root mean squared error') + xlab('Model') +
+  scale_x_discrete(limits = c('mode','mean','age','age+gender'))
 ```
 
 This shows us that adding age to the model helped a lot, while adding gender to the model only helped a little bit.
+
+### Examples of signal/noise and model fit
+
+```{r}
+dataDf=data.frame(income=runif(100)*50000 + 40000)
+dataDf$CheckingAccountBalance=dataDf$income*0.4 + rnorm(100)*500
+ggplot(dataDf,aes(x=income,y=CheckingAccountBalance)) + geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+
+dataDf$CheckingAccountBalance=dataDf$income*0.4 + rnorm(100)*5000
+ggplot(dataDf,aes(x=income,y=CheckingAccountBalance)) + geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+
+dataDf$caffeineLevel = runif(100)*10 
+dataDf$caffeineLevelInvertedU = (dataDf$caffeineLevel - mean(dataDf$caffeineLevel))**2
+dataDf$testPerformance=-1*dataDf$caffeineLevelInvertedU +  rnorm(100)*0.5
+ggplot(dataDf,aes(x=caffeineLevel,y=testPerformance)) + geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+
+```
 
 ### Overfitting
 
@@ -147,6 +177,7 @@ Often the model that fits the best to one sample is not the best model for anoth
 First, let's generate some data so that we know what the true relation is between the variables.  We will add some random noise to simulate variability across people.
 
 ```{r}
+set.seed(123456)
 NHANES_simulated=data.frame(Age=NHANES_child$Age)
 noiseLevel=20
 NHANES_simulated$Height = predict(model_age,NHANES_simulated) +   rnorm(dim(NHANES_simulated)[1],sd=noiseLevel)
@@ -196,15 +227,30 @@ ggplot(samp2,aes(x=Age,y=Height)) +
   geom_smooth(data=samp1,method='lm',formula=y~poly(x,8),color='red',se=FALSE) + 
   geom_smooth(data=samp1,method='lm',color='blue',se=FALSE) 
 
+print(sse)
 
 ```
 
+### The mean
+
+```{r}
+data=c(3,5,5,7,8,9)
+print(paste('sum(data):',sum(data)))
+print(paste('N:',length(data)))
+print(paste('mean:',sum(data)/length(data)))
+print('error:')
+print(data - sum(data)/length(data))
+print(paste('mean error:',mean(data - sum(data)/length(data))))
+dfData=data.frame(data=data,error=data-mean(data))
+print(dfData)
+mean(dfData$error)
+```
 
 ### Mean as minimizing sum of squared deviations
 
 Let's examine a range of values and measure the deviation of the data from them, and then compare to the mean.
 ```{r}
-df_error=data.frame(val=seq(100,175,0.1))
+df_error=data.frame(val=seq(100,175,0.05))
 df_error$sse=NA
 for (i in 1:dim(df_error)[1]){
   err=NHANES_child$Height - df_error$val[i]
@@ -242,6 +288,9 @@ print(paste("median=",median(NHANES_child$Height)))
 print(paste('minimum absolute error at',df_error[df_error$abserror==min(df_error$abserror),]$val))
       
 ```
+
+
+
 ### Sample size
 
 So far we have used the entire subset of 2,223 children from NHANES.  However, often we don't have the luxury of such a large sample.  What happens if we look at a much smaller sample? Let's sample 20 subjects from the complete group.
@@ -298,6 +347,22 @@ ggplot(sampmeans_df,aes(SampleSize,SampleMean,group=runs)) + geom_hline(yinterce
 
 This is an example of how we can use *simulation* to get an intution about various statistical concepts.
 
+#### Median
+
+```{r}
+d=c(8,6,3,14,12,7,6,4,9)
+print(d)
+print(d[order(d)])
+print(paste('median:',median(d)))
+
+ggplot(data.frame(d=d),aes(d)) + stat_ecdf() + ylab('Cumulative density') + annotate('point',x=median(d),y=0.5,color='blue') + scale_x_continuous(breaks=seq(2,15,1),labels=seq(2,15,1),limits=c(2,15))
+
+d=c(8,6,3,14,12,7,6,4,9,14)
+
+ggplot(data.frame(d=d),aes(d)) + stat_ecdf() + ylab('Cumulative density') + annotate('point',x=median(d),y=0.5,color='blue') + scale_x_continuous(breaks=seq(2,15,1),labels=seq(2,15,1),limits=c(2,15))
+
+```
+
 #### Effects of outliers
 ```{r}
 library(knitr)
@@ -327,6 +392,20 @@ print(paste('interquartile range:',format.money(IQR(df$income))))
 
 ```
 
+
+### Variance as fit of the mean
+
+```{r}
+d=c(3,5,6,7,9)
+sum(d)
+mean(d)
+errors=d-mean(d)
+print(errors)
+print(sum(errors))
+print(sum(errors**2))
+
+```
+
 ### Degrees of freedom and estimating the variance
 
 Let's treat the entire NHANES child sample as our "population", and see how well the estimates of variance using either N or N-1 in the denominator will estimate the population variance.
@@ -350,5 +429,43 @@ for (i in 1:nsamp){
 print(paste('variance estimate(N):',mean(varhat_n)))
 print(paste('variance estimate(N-1):',mean(varhat_nm1)))
 
+```
+
+#### Interquartile range
+
+```{r}
+d=seq(1,9)
+quartiles=quantile(d,c(0.25,0.5,0.75))
+print(quartiles)
+
+p=ggplot(data.frame(d=d),aes(d)) + stat_ecdf() + ylab('Cumulative density') + scale_x_continuous(breaks=seq(1,9,1),labels=seq(1,9,1),,limits=c(0,10))
+
+# add quartile points
+
+for (q in c(0.25,0.5,0.75)){
+  p=p+annotate('point',x=quantile(d,q),y=q,color='blue',size=3) 
+  }
+print(p)
+```
+
+Show example with NHANES height.
+
+```{r}
+heightIQR=IQR(NHANES_adult$Height)
+print(heightIQR)
+heightQuartiles=quantile(NHANES_adult$Height,c(0.25,0.5,0.75))
+print(heightQuartiles)
+ggplot(data=NHANES_adult,aes(Height)) + 
+  geom_histogram(bins=100) +
+  geom_vline(xintercept=heightQuartiles[1],size=1,color='blue',linetype='dashed') +
+  geom_vline(xintercept=heightQuartiles[2],size=1,color='blue',linetype='dashed') +
+  geom_vline(xintercept=heightQuartiles[3],size=1,color='blue',linetype='dashed') 
+
+print(sd(NHANES_adult$Height)*1.349)
+```
+
+```{r}
+ggplot(NHANES_adult, aes(x="",y=Height)) +
+  geom_boxplot()
 ```
 
