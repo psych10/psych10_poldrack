@@ -1,27 +1,30 @@
 ---
-title: "Lecture 4: Summarizing Data"
+title: "Session 4: Summarizing Data"
 output:
   html_document:
     df_print: paged
 ---
 
-Frequency distribution example from Lecture 4.
+This RMarkdown notebook generates the examples used for Session 4.
 
-```{r}
+```{r,echo=FALSE,message=FALSE}
 library(ggplot2)
 library(dplyr)
-library(tibble)
+
+```
+
+#### Frequency distribution example
+
+```{r}
 # create a list of the data from the lecture slides
-df <- as.tibble(c(1,	1,	2,	3,	3,	3,	3,	4,	4,	4),col.names=c('value'))
+df <- data.frame(value=c(1,	1,	2,	3,	3,	3,	3,	4,	4,	4))
 
 # first compute the frequency distribution using the table() function
 
 freqdist <- table(df)
 print(freqdist)
 
-
 ```
-
 
 Compute the cumulative distribution
 
@@ -53,15 +56,6 @@ ggplot(df, aes(value,..density..)) +
 
 ```
 
-Histogram for regenerating data.
-
-```{r}
-d=c(9,12,14,14,18,18,18,20,21)
-ggplot(data.frame(value=d), aes(value)) +
-  geom_histogram(binwidth=1,fill='blue') +
-  scale_x_continuous(breaks = round(seq(min(d), max(d), by = 1),1))
-```
-
 Plot the cumulative distribution.
 
 ```{r}
@@ -85,7 +79,7 @@ print(paste('Percentage greater than two:',100*propGreaterThanTwo))
 Make a stem and leaf plot
 
 ```{r}
-dfStemLeaf <- as.tibble(c(8,8,9,10,12,12,14,18,21,22,23,25,25,30,32,51),col.names=c('value'))
+dfStemLeaf <- data.frame(value=c(8,8,9,10,12,12,14,18,21,22,23,25,25,30,32,51))
 
 stem(dfStemLeaf$value)
 ```
@@ -109,9 +103,7 @@ ggplot(NHANES, aes(Age)) +
 What's up with the big spike at 80?
 Hint: Look at the help function for NHANES.
 
-#### Group Exercise:
-
-Break into groups of 4.  Together, each group should draw its best guess as to the shape of the histogram for Weight (in pounds) of individuals in the NHANES dataset.  You can look at the NHANES help if you need more information about the dataset.  However, you should not look at the Weight data in the NHANES dataset.
+Now let's look at weight.
 
 ```{r}
 
@@ -258,7 +250,31 @@ ggplot(nfriends, aes(Nfriends)) +
 
 ```
 
-Plot this on a log scale
+#### Logarithms
+
+```{r}
+x=seq(1,64)
+p=ggplot(data.frame(x=x,logx=log2(x)),aes(x,logx)) +
+  geom_line(color='blue') + geom_line(aes(x=x,y=x),color='red')
+for (i in 1:6) {
+  p=p+annotate('point',x=2**i,y=i) +
+    annotate('point',x=2**i,y=2**i) 
+}
+print(p)
+
+x=seq(1.0,1e-4,-0.001)
+p=ggplot(data.frame(x=x,logx=log2(x)),aes(x,logx)) +
+  geom_line(color='blue') + geom_line(aes(x=x,y=x),color='red') 
+for (i in 1:6) {
+  p=p+annotate('point',x=2**-i,y=-i) +
+    annotate('point',x=2**-i,y=2**-i) 
+}
+print(p+ scale_y_continuous(breaks=seq(-10,2,1)))
+
+```
+
+
+Plot the friend data on a log scale
 
 ```{r}
 nfriends$logNfriends=log(nfriends$Nfriends)
@@ -276,6 +292,8 @@ ggplot(nfriends, aes(logNfriends)) +
 
 ```
 
+#### Extra: Simulating social networks
+
 Let's see how this works using a simple simulation.  We will start with two people and then add additional individuals one at a time.  Each of these new individuals will be friends with either one or two people, with the likelihood of friendship based on the relative number of friends that one has.  That is, the rich get richer.  We simulate this process using the Barabasi-Albert graph simulator in the NetworkX python package (in prefattach_simulation.py). These results are saved to a file that we load here.  We will also compare this to a social network of the same size where friendships are created randomly.
 
 ```{r}
@@ -289,6 +307,8 @@ ggplot(degreeData,aes(V1)) +
 ggplot(degreeDataRandom,aes(V1)) +
   geom_histogram(bins=100) + xlab('Number of friends') + xlim(0,140)
 ```
+
+#### Household income
 
 Let's look at household income in the US.  Income data come from the IPUMS Current Population Survey (https://cps.ipums.org/cps/index.shtml), which includes data from 126,118 households.
 
@@ -323,11 +343,32 @@ percentileData=data.frame(pctile=seq(1,100),
                           income=quantile(df$INCTOT,seq(1,100)/100),
                           height=quantile(NHANES_adult$Height,seq(1,100)/100))
 ggplot(percentileData,aes(pctile,income)) + xlab('Percentile') +
-  geom_line(color='blue',size=1)
-
+  geom_line(color='black',size=1) +
+  annotate('point',x=25,y=quantile(df$INCTOT,0.25),color='blue') +
+  annotate('point',x=50,y=quantile(df$INCTOT,0.5),color='blue') +
+  annotate('point',x=75,y=quantile(df$INCTOT,0.75),color='blue') +
+annotate('point',x=99,y=quantile(df$INCTOT,0.99),color='blue')
+print(quantile(df$INCTOT,c(0.25,0.5,0.75,0.99)))
 
 ggplot(percentileData,aes(pctile,height)) + xlab('Percentile') +
   geom_line(color='blue',size=1)
 
 ```
+
+#### Extra: Word frequency
+
+data obtained from http://www.anc.org/data/anc-second-release/frequency-data/
+
+```{r}
+wfdata=read.table('ANC-written-count.txt',sep='\t',quote='"')
+names(wfdata)=c('word','lemma','POS','count')
+
+```
+```{r}
+wfdata$logCount=log(wfdata$count)
+ggplot(wfdata,aes(logCount)) +
+  geom_histogram(bins=100) + xlim(0,max(wfdata$logCount))
+```
+
+
 
