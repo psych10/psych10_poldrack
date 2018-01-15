@@ -1,0 +1,46 @@
+---
+title: "Memory recall analysis"
+output: html_notebook
+---
+
+```{r}
+respData=read.table('Memory recall test.csv',header=TRUE,sep=',',
+             stringsAsFactors = FALSE)
+```
+
+```{r}
+respData$nRecalled=NULL
+respData$nHits=0
+
+# last item in this list is the DRM critical lure
+listWords=c('dog','fish','dork','bilge','date')
+
+itemData=data.frame(item=c(NA),resp=c(NA))
+
+for (i in 1:dim(respData)[1]){
+  split_resp=strsplit(respData[i,2],' ')[[1]]
+  respData$nRecalled[i]=length(split_resp)
+  
+  for (j in 1:length(listWords)){
+    if (listWords[j] %in% split_resp){
+      itemData[i,j]=1
+    }
+  }
+}
+
+
+```
+
+Plot serial position curve
+
+```{r}
+itemMeans=
+serialPositionData = data.frame(serialPosition=seq(1,length(listWords)),
+                                itemMeans=apply(itemData,2,mean))
+
+ggplot(serialPositionData[1:length(listWords)-1,],
+       aes(x=serialPosition,y=itemMeans)) +
+  geom_line(stat="identity") 
+```
+
+
