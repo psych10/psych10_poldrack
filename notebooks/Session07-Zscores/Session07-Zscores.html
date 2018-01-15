@@ -127,25 +127,6 @@ $(document).ready(function () {
 <div id="how-safe-is-california" class="section level3">
 <h3>How safe is California?</h3>
 <p>Let’s ask this question using data for 2014 from the FBI’s Uniform Crime Reporting site (<a href="https://www.ucrdatatool.gov/Search/Crime/State/RunCrimeOneYearofData.cfm" class="uri">https://www.ucrdatatool.gov/Search/Crime/State/RunCrimeOneYearofData.cfm</a>).</p>
-<pre class="r"><code>library(ggplot2)
-library(dplyr)</code></pre>
-<pre><code>## 
-## Attaching package: 'dplyr'</code></pre>
-<pre><code>## The following objects are masked from 'package:stats':
-## 
-##     filter, lag</code></pre>
-<pre><code>## The following objects are masked from 'package:base':
-## 
-##     intersect, setdiff, setequal, union</code></pre>
-<pre class="r"><code>library(mapproj)</code></pre>
-<pre><code>## Loading required package: maps</code></pre>
-<pre class="r"><code>library(fiftystater)
-library(cowplot)</code></pre>
-<pre><code>## 
-## Attaching package: 'cowplot'</code></pre>
-<pre><code>## The following object is masked from 'package:ggplot2':
-## 
-##     ggsave</code></pre>
 <pre class="r"><code>crimeData=read.table('CrimeOneYearofData_clean.csv',header=TRUE,sep=',')
 # let's drop DC since it is so small
 crimeData=subset(crimeData,State!='District of Columbia')

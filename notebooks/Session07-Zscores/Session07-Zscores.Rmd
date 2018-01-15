@@ -5,17 +5,21 @@ output:
     df_print: paged
 ---
 
+```{r echo=FALSE,message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(mapproj)
+library(fiftystater)
+library(cowplot)
+
+```
+
 ### How safe is California?
 
 Let's ask this question using data for 2014 from the FBI's Uniform Crime Reporting site (https://www.ucrdatatool.gov/Search/Crime/State/RunCrimeOneYearofData.cfm).
 
 
 ```{r}
-library(ggplot2)
-library(dplyr)
-library(mapproj)
-library(fiftystater)
-library(cowplot)
 
 crimeData=read.table('CrimeOneYearofData_clean.csv',header=TRUE,sep=',')
 # let's drop DC since it is so small
