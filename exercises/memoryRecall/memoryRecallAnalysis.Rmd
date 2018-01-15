@@ -12,35 +12,46 @@ respData=read.table('Memory recall test.csv',header=TRUE,sep=',',
 respData$nRecalled=NULL
 respData$nHits=0
 
+
+listWords=c('fear','temper','hatred','fury','happy',
+            'enrage','emotion','rage','hate','mean',
+            'ire','mad','wrath','calm','fight','anger')
 # last item in this list is the DRM critical lure
 listWords=c('dog','fish','dork','bilge','date')
 
-itemData=data.frame(item=c(NA),resp=c(NA))
+itemData=c()
 
 for (i in 1:dim(respData)[1]){
-  split_resp=strsplit(respData[i,2],' ')[[1]]
+  split_resp=strsplit(tolower(respData[i,2]),' ')[[1]]
   respData$nRecalled[i]=length(split_resp)
   
   for (j in 1:length(listWords)){
-    if (listWords[j] %in% split_resp){
-      itemData[i,j]=1
-    }
+    itemData=rbind(itemData,c(j,as.integer(listWords[j] %in% split_resp)))
   }
 }
-
-
+itemDataDf=as.data.frame(itemData)
+names(itemDataDf)=c('position','hit')
 ```
 
 Plot serial position curve
 
 ```{r}
-itemMeans=
-serialPositionData = data.frame(serialPosition=seq(1,length(listWords)),
-                                itemMeans=apply(itemData,2,mean))
+source('summarySE.R')
+sm=summarySE(itemDataDf, 
+             measurevar="hit", groupvars=c("position"))
 
-ggplot(serialPositionData[1:length(listWords)-1,],
-       aes(x=serialPosition,y=itemMeans)) +
-  geom_line(stat="identity") 
+ggplot(subset(sm,position<length(listWords)),aes(x=position,y=hit)) +
+  geom_line() +
+  ylim(0,1) + ylab('Proportion correct recall') + 
+  xlab('Serial position of item in list')
+
 ```
 
+```{r}
+meanDf=data.frame(hitRate=c(mean(subset(sm,position<length(listWords))$hit),
+                  mean(subset(sm,position<length(listWords))$hit)),
+                  condition=c('studied','critical lure'))
+ggplot(meanDf,aes(x=condition,y=hitRate))+geom_bar(stat="identity")
+
+```
 
