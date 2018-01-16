@@ -1,0 +1,66 @@
+---
+title: "Birthday example analysis"
+output:
+  html_document:
+    df_print: paged
+---
+
+Here we examine a standard problem in probability theory known as the "birthday problem".  There are various versions, but the one that we examine is:  Given some number of students in the class, how many students do we expect to share a birthday with at least one other student?
+
+```{r echo=FALSE,message=FALSE}
+library(ggplot2)
+```
+
+We will use the data collected from the class using the Google Form.
+
+```{r}
+birthdayData=read.csv('Birthday form.csv')
+nstudents=dim(birthdayData)[1]
+birthdayData$Timestamp=NULL
+names(birthdayData)=c('Birthday')
+
+bdTable=table(birthdayData$Birthday)
+print('Number of people who share a birthday with a classmate:')
+nMatchesObserved=sum(bdTable[bdTable>1])
+nMatchesObserved
+```
+
+Now let's see how many we would have expected.  The math to compute this is fairly complicated, so let's simulate it instead.
+
+```{r}
+
+nRuns=5000
+nMatches=array(NA,nRuns)
+for (i in 1:nRuns){
+  # assign an integer from 1-365 to each individual
+  # replacing after sampling
+  birthdayDataSimulated=data.frame(birthday=sample.int(365,size=nstudents,replace=TRUE))
+  bdTable=table(birthdayDataSimulated$birthday)
+  nMatches[i]=sum(bdTable[bdTable>1])
+}
+print('expected number of matches:')
+print(mean(nMatches))
+
+ggplot(data.frame(nMatches=nMatches),aes(nMatches)) +
+  geom_histogram(binwidth=1) +
+  geom_vline(xintercept=nMatchesObserved, color='blue')
+```
+
+We can also compute it directly using probability theory.  Here I am adapting the explanation found at https://math.stackexchange.com/questions/35791/birthday-problem-expected-number-of-collisions:
+
+The probability person B shares person A's birthday is $\frac{1}{N}$, where N is the number of equally possible birthdays,
+
+so the probability B does not share person A's birthday is $1 - \frac{1}{N}$,
+
+so the probability $n-1$ other people do not share A's birthday is $(1−\frac{1}{N})^{n−1}$,
+
+so the expected number of people who do not have others sharing their birthday is $n*(1−\frac{1}{N})^{n−1}$,
+
+so the expected number of people who share birthdays with somebody is $n*(1 - (1−\frac{1}{N})^{n−1})$.
+
+```{r}
+expected=(1 - (1-1/365)**(nstudents-1))*nstudents
+print('expected number by probability theory:')
+expected
+```
+
