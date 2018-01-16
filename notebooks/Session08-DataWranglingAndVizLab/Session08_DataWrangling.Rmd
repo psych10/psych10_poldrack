@@ -1,0 +1,184 @@
+---
+title: 'Session 8: Data wrangling'
+output:
+  html_document:
+    df_print: paged
+---
+
+Our goal here is to test whether attitudes about statistics are different between the different student year groups in the class.
+
+```{r echo=FALSE,message=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(stringr)
+library(assertthat)
+```
+
+
+### Statistics attitude data from course survey
+
+These data were collected using the Attitudes Towards Statistics (ATS) scale (from https://www.stat.auckland.ac.nz/~iase/cblumberg/wise2.pdf).
+
+The 29-item ATS has two subscales. The Attitudes Toward Field subscale consists of the following 20 items, with reverse-keyed items indicated by an “(R)”:
+1, 3, 5, 6(R), 9, 10(R), 11, 13, 14(R), 16(R), 17, 19, 20(R), 21, 22, 23, 24, 26, 28(R), 29
+
+The Attitudes Toward Course subscale consists of the following 9 items:
+2(R), 4(R), 7(R), 8, 12(R), 15(R), 18(R), 25(R), 27(R)
+
+Let's load the data from the file. First, have a look at the data in the file, to see what separates the different values.  In this case, we see that it is separated by commas, which is known as a "comma-separated value" or CSV file.  We can read this using the read.csv() function.
+
+Note: I have removed the data from the two graduate students in the class and the one 5+ year student, since those would be too easily identifiable.
+
+```{r}
+attitudeData=read.csv('statsAttitude.txt',stringsAsFactors = FALSE)
+head(attitudeData)
+dim(attitudeData)
+```
+
+Right now the variable names are somewhat unwieldy, since they include the entire name of the item; this is how Google Forms stores the data.  First, let's change the variable names to be somewhat more readable.  
+
+```{r}
+# The first column is the year
+origNames=names(attitudeData)
+newNames=c('Year')
+# the rest of the columns are for the 29 questions in the statistics attitude survey. # Let's use shortened names that include the item number for each one.
+for (i in 1:29){
+  newNames=c(newNames,sprintf('statt%02d',i))
+}
+
+names(attitudeData)=newNames
+# let's add a participant ID so that we will be able to identify them later
+attitudeData = attitudeData %>% mutate(ID=row.names(attitudeData))
+head(attitudeData)
+```
+
+
+If you look closely at the data, you can see that there are a couple of survey participants who did not respond to any of the items:
+
+```{r}
+attitudeData[57,]
+```
+
+There are also a few other participants who have occasional missing values.  We can count these up for each participant and present them in a table:
+
+```{r}
+# compute the number of NAs for each participant
+numNAvals=apply(is.na(attitudeData),1,sum)
+table(numNAvals)
+
+```
+
+There are two participants who are missing all 29 values, and another 5 participants who are missing just one of the values.  There are fancy techniques for trying to guess the value of missing data (known as "imputation") but since the number of participants with missing values is small, let's just drop those participants from the list. 
+
+Here we are going to use something called a "pipe", which is commonly used within the tidyverse; you can read more [here](http://magrittr.tidyverse.org/). A pipe takes the output from one command and feeds it as input to th next command. In this case, simply writing the name of the data frame (attitudeData) causes it to be input to the drop_na() command following the pipe, and the output from the entire operation is stored in the new variable (attitudeDataNoNA).
+
+The benefit of pipes will become apparent later when we want to start stringing together multiple functions into a single command.
+
+```{r}
+# this is equivalent to drop_na(attitudeData)
+attitudeDataNoNA = attitudeData %>% drop_na()
+dim(attitudeDataNoNA)
+```
+
+Now we have a fairly well cleaned up dataset, but it's still missing something...
+
+
+#### Tidy data
+Right now we see that each of the different items is stored in a different column.  This violates the principles of ["tidy data"](http://r4ds.had.co.nz/tidy-data.html), which state the following:
+
+- Each variable must have its own column.
+- Each observation must have its own row.
+- Each value must have its own cell.
+
+This is shown graphically the following figure (from Hadley Wickham, developer of the "tidyverse"):
+
+![Following three rules makes a dataset tidy: variables are in columns, observations are in rows, and values are in cells..](http://r4ds.had.co.nz/images/tidy-1.png)
+
+In our case, each observation is a response, and the variables are the student's year and the response to each question.  This means that we need to create a new dataset, with each row representing a single response.  It will have four columns:
+- Year
+- ID
+- Question
+- ResponseRaw (for the raw, before recoding)
+
+Thus, we want to take the dataset from being "wide" to being "long".  We can do this using the gather() function from the tidyr package.  We want it to reshape the data so that each response is on a separate line.
+
+```{r}
+attitudeDataTidy = attitudeDataNoNA %>% gather(key=Question,
+                                               value=ResponseRaw,
+                                               -Year, -ID)
+head(attitudeDataTidy)
+```
+
+OK, now our data are in proper tidy form. ggplot knows how to work with these data, so now it's easy to show a histogram of raw responses.
+
+```{r}
+ggplot(attitudeDataTidy,aes(ResponseRaw,..density..)) +
+  geom_histogram(binwidth=0.5)
+```
+
+This looks like responses are all over the place - but remember from above that some of the items require recoding.  The raw responses were on the 1-7 scale, which for those items we need to reverse by subtracting the raw score from 8 (such that 7 becomes 1 and 1 becomes 7).  To do this, we first need to create a column that contains the question numbers.  Then we reverse the responses for those items that are in our list of reverse-scored items.
+
+```{r}
+# start by filling in the new Response variable with the Raw responses
+# then we will flip the relevant ones
+attitudeDataTidy = attitudeDataTidy %>%
+  mutate(Qnum=as.integer(str_replace(Question,'statt',''))) %>%
+  mutate(Response=ResponseRaw)
+
+reverse_score_attitude=c(6,10,14,16,20,28,2,4,7,12,15,18,25,27)
+
+attitudeDataTidy$Response[attitudeDataTidy$Qnum %in% reverse_score_attitude] = 8 - attitudeDataTidy$ResponseRaw[attitudeDataTidy$Qnum %in% reverse_score_attitude]  
+
+```
+
+Whenever we do an operation like this, it's good to check that it actually worked correctly.  We can do that by identifying all of the question numbers where the raw response is different from the final response, and make sure that they match the set of items that we meant to change.  It's easy to make mistakes in coding, which is why it's important to check your work as well as you can.
+
+One thing we can use to help with checking is what is called an "assertion".  This is basically our way of saying "X should be true, and if it's not, please let me know!". 
+
+Let's start with an easy version of this - let's make sure that there are no responses outside of the 1-7 scale that we expect, and make sure that no one specified a year outside of the 1-4 range.  (We know these are true, but this shows how we could confirm it if we weren't sure.)
+
+```{r}
+
+assert_that(all(attitudeDataTidy$Response %in% c(1:7)))
+assert_that(all(attitudeDataTidy$Year %in% c(1:4)))
+
+```
+
+Now let's try the more complex example, where we check that the question numbers for reversed items are correct.
+
+```{r}
+reversedItemsDf=attitudeDataTidy %>% subset(Response != ResponseRaw) 
+assert_that(all(reversedItemsDf$Qnum %in% reverse_score_attitude))
+```
+
+Now our data are finally ready to analyze.  First, let's look at the mean overall response across all items.
+
+```{r}
+ggplot(attitudeDataTidy,aes(Response,..density..)) +
+  geom_histogram(binwidth=0.5)
+```
+
+Now that's not so bad - most people respond fairly positively overall.
+
+We can also collapse these by participant, to see what the distribution of overall attitudes looks like across people.  To collapse the results for each participant we will simply sum their responses across all items.
+
+```{r}
+participantSummary=attitudeDataTidy %>% group_by(ID) %>%
+  summarize(meanResponse=mean(Response),year=unique(Year))
+
+ggplot(participantSummary,aes(meanResponse)) +
+  geom_histogram(bins=20)
+
+```
+
+Now we can also separate these out by year
+
+```{r}
+participantSummaryByYear=attitudeDataTidy %>% group_by(Year) %>%
+  summarize(meanResponse=mean(Response),sd=sd(Response),n=n()/29)
+
+ggplot(participantSummary,aes(x=year,y=meanResponse)) +
+  geom_smooth(method='lm')
+```
+
