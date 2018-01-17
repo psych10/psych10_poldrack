@@ -17,12 +17,17 @@ We will use the data collected from the class using the Google Form.
 birthdayData=read.csv('Birthday form.csv')
 nstudents=dim(birthdayData)[1]
 birthdayData$Timestamp=NULL
-names(birthdayData)=c('Birthday')
+names(birthdayData)=c('Birthday','Expected')
 
 bdTable=table(birthdayData$Birthday)
 print('Number of people who share a birthday with a classmate:')
 nMatchesObserved=sum(bdTable[bdTable>1])
 nMatchesObserved
+
+print('Number of people you expected to share a birthday with a classmate:')
+
+nMatchesPredicted=mean(birthdayData$Expected)*nstudents
+nMatchesPredicted
 ```
 
 Now let's see how many we would have expected.  The math to compute this is fairly complicated, so let's simulate it instead.
