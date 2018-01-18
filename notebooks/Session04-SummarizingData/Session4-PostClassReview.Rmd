@@ -1,0 +1,134 @@
+---
+title: 'Session 4: Post-class review'
+output:
+  html_document:
+    df_print: paged
+---
+
+This notebook provides some further explanation of points that were raised in the in-class assessment as being confusing.
+
+#### Relative frequency and density
+
+The terms "relative frequency" and "density" are interchangeable for the purposes of today's discussion.  We will return later to further discussion of "density"" in the context of probabilities; for now, the main requirement is that a density sums to 1.
+
+Here is another example.  First, we generate some data, using the c() function to place a set of values into a vector, and print out the results.
+
+```{r}
+d <- c(5,5,8,12,14,15,15,15,21,22)
+d
+```
+
+We can use the table() command to compute the (absolute) frequency distribution.
+
+```{r}
+dFreqDist <- table(d)
+dFreqDist
+```
+
+The table() function counts how often each value occurs in the data; 5 occurs 2 times, 15 occurs 3 times, and so on.
+
+The relative frequency (also known as density) takes the absolute frequency and expresses it as a proportion of the total number of values.  We can go from absolute frequency to relative frequency by dividing the absolute frequency distribution by the number of values, which we can determine using the length() function to tell us how long the vector is.
+
+```{r}
+dRelativeFreqDist <- dFreqDist/length(d)
+dRelativeFreqDist
+```
+
+Let's just confirm that the density actually sums to one:
+
+```{r}
+sum(dRelativeFreqDist)
+```
+
+Success!
+
+The density is expressed as proportions, but we could also turn it into percentages by multiplying it by 100:
+
+```{r}
+dPercentileFreqDist <- dRelativeFreqDist *100
+dPercentileFreqDist
+```
+
+Now we can see that 20% of the items had the value of 5, 10% had the value of 12, and so on.
+
+### Cumulative frequency and density
+
+The cumulative frequency is the count of the number of values that are the same or smaller than the value in question.  This is computed in R using the cumsum() function, which we will apply to the frequency distribution that we computed above.
+
+```{r}
+cumulativeFreqDist <- cumsum(dFreqDist)
+cumulativeFreqDist
+```
+
+For example, there are four values in the vector that have a value of 12 or less, and 8 that have a value of 15 or less.
+
+This is expressed in absolute counts, but we can also turn this from a cumulative *frequency* into a cumulative *density* by diving by the number of values.  
+
+```{r}
+cumulativeDensity <- cumulativeFreqDist/length(d)
+cumulativeDensity
+```
+
+
+### Using data frames
+
+In order to use ggplot we need to understand the idea of a data frame.  A data frame is a structure that contains a number of different variables.  Let's say that we wanted to store information about several people and their GPAs.  We could do this using the data.frame() function to create a new data frame:
+
+```{r}
+names <- c('Joe','Bill','Mike')
+gpa <- c(3.5,3.7,3.4)
+gpaDf <- data.frame(name=names,gpa=gpa)
+gpaDf
+```
+
+Here you can see that the data frame contains two columns: one called *name* that contains the names, and one called *gpa* that contains the gpa values for each person.
+
+If you want to access the values of a specific variable within the data frame, you can use the $ operation.
+
+```{r}
+gpaDf$name
+```
+
+
+```{r}
+gpaDf$gpa
+```
+
+You could also do computations on these variables, which will be treated like vectors.  For example, we can take the mean of the gpa values.
+
+```{r}
+mean(gpaDf$gpa)
+```
+
+
+### Using ggplot
+
+We will spend much more time next week on how to use ggplot, but I wanted to give a bit more detail to help with your first problem set.  If you want more details about using ggplot, a good place to start is the reading for Session 8: http://r4ds.had.co.nz/data-visualisation.html
+
+Let's create a histogram of the data contained in the vector d from above.  Before doing anything else, we need to load the ggplot2 library, which contains the ggplot() commands that we will use.
+
+```{r}
+library(ggplot2)
+```
+
+Because ggplot works with data frames, we then need to place our data into a data frame, using the data.frame() function.  
+
+```{r}
+plottingDf <- data.frame(theData=d)
+```
+
+This will take the data from our vector d (defined earlier) and put it into variable called theData within our data frame called plottingDf.  We can see the values of theData within the data frame using the $ operation:
+
+```{r}
+plottingDf$theData
+```
+
+Now let's plot a histogram of these data using ggplot.  I will write the whole command first, and then dissect it.
+
+```{r}
+ggplot(plottingDf,aes(theData)) + geom_histogram(binwidth=1)
+```
+
+The first part of this command - `ggplot(plottingDf,aes(theData))` - includes two arguments that are provided to ggplot.  the first - `plottingDf`- tells ggplot that we are going to be getting the data from the data framed called plottingDf.  The second is a function itself -`aes(theData)` - where `aes` stands for "aesthetics".  We will talk a lot more about aesthetics in Session 8, but in this example it is telling ggplot which variable to use for plotting  in this case, theData.  
+
+The second command - `geom_histogram(binwidth=1)` - tells ggplot to create a histogram using the data that we specified in the first part of the ggplot command, using a bin width of 1.  
