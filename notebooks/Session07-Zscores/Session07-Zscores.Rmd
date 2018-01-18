@@ -8,6 +8,7 @@ output:
 ```{r echo=FALSE,message=FALSE}
 library(ggplot2)
 library(dplyr)
+library(tidyr)
 library(mapproj)
 library(fiftystater)
 library(cowplot)
@@ -34,6 +35,7 @@ ggplot(crimeData,aes(Violent.crime.total)) +
   geom_histogram(bins=25) + geom_vline(xintercept = caCrimeData$Violent.crime.total,color='blue') + xlab('Number of violent crimes in 2014')
 print(paste('number of 2014 violent crimes in CA:',caCrimeData$Violent.crime.total))
 ```
+
 California leads the list, which we can also see if we map the data geographically.
 
 With R it's also easy to generate a map showing the distribution of a variable across states.
@@ -59,7 +61,6 @@ p + fifty_states_inset_boxes()
 ```
 
 
-
 But wait, CA also has the largest population of any state in the US, so it's reasonable that it will also have more crimes.  Let's plot the two against one another.
 
 ```{r}
@@ -69,6 +70,7 @@ ggplot(crimeData,aes(Population,Violent.crime.total)) +
            color='blue')
 
 ```
+
 We can correct for this by computing a per-capita violent crime rate, by dividing the number of crimes by the population of the state.  The dataset from the FBI already includes this value (expressed as rate per 100,000 people).
 
 ```{r}
@@ -143,6 +145,8 @@ plot_density_and_cdf = function(zcut,zmin=-4,zmax=4,plot_cdf=TRUE,zmean=0,zsd=1)
   }
 }
 plot_density_and_cdf(1)
+plot_density_and_cdf(2)
+
 plot_density_and_cdf(1,zmean=100,zsd=10)
 
 
@@ -229,7 +233,6 @@ ggplot(crimeData,aes(ViolentCrimeRateStdScore)) +
 
 ```
 
-
 Let's show a table with the states sorted by their z-score
 
 ```{r}
@@ -263,17 +266,18 @@ p + fifty_states_inset_boxes()
 
 Let's say that we want to compare the distributions of violent and property crimes across states.  First let's plot those against one another, with CA plotted in blue.
 
-```{r}
+```{r fig.height=6, fig.width=6}
 ggplot(crimeData,aes(Violent.Crime.rate,Property.crime.rate)) +
   geom_point() + 
   annotate('point',x=caCrimeData$Violent.Crime.rate,y=caCrimeData$Property.crime.rate,
            color='blue') + xlab('Violent crime rate (per 100,000)') +
-          ylab('Property crime rate (per 100,000)')
+          ylab('Property crime rate (per 100,000)') + 
+  xlim(0,4000) + ylim(0,4000)
 ```
 
 As you can see the rates of property crimes are far higher than the rates of violent crimes, so we can't just compare the numbers directly.  We can plot the Z-scores for these data against one another - here again we see that the distribution of the data does not change.
 
-```{r}
+```{r fig.height=6, fig.width=6}
 crimeData$PropertyCrimeRateZscore=(crimeData$Property.crime.rate - mean(crimeData$Property.crime.rate))/sd(crimeData$Property.crime.rate)
 caCrimeData=subset(crimeData,State=="California")
 
@@ -283,7 +287,6 @@ ggplot(crimeData,aes(ViolentCrimeRateZscore,PropertyCrimeRateZscore)) +
            color='blue')
 
 ```
-
 
 What does this plot tell you about the crime rate of the state of California?
 
@@ -311,4 +314,59 @@ ggplot(crimeData,aes(Population,ViolenceDiff)) +
 
 The smallest states appear to have the largest differences in both directions - why would that be?
 
+#### Z-score examples
+
+```{r}
+
+df=data.frame(raw=c(3,5,5,7,8,12,14,15))
+df=df %>% mutate(zscore=(raw - mean(raw))/sd(raw))
+df
+```
+
+#### Population vs. sample Z-scores
+
+Let's use height from the NHANES adult sample to demonstrate how Z-scores can differ between the NHANES population and a specific sample.
+
+First let's load the NHANES data and compute the population parameters.
+```{r}
+library(NHANES)
+NHANES$isChild <- NHANES$Age<18
+
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
+
+populationMean=mean(NHANES_adult$Height)
+populationSD=sd(NHANES_adult$Height)
+
+```
+
+Now let's sample a small number of individuals and compute their Z-scores, using both the sample statistics and population parameters.
+
+```{r}
+set.seed(123456)
+sampleDataDf=data.frame(Height=sample(NHANES_adult$Height,12))
+sampleMean=mean(sampleDataDf$Height)
+sampleSD=sd(sampleDataDf$Height)
+
+summaryDf=data.frame(type=c('sample','population'),
+                     mean=c(sampleMean,populationMean),
+                     sd=c(sampleSD,populationSD))
+summaryDf
+
+
+sampleDataDf = sampleDataDf %>% 
+  mutate(Zsample=(Height-sampleMean)/sampleSD,
+         Zpop=(Height-populationMean)/populationSD,
+         individual=seq(1,12))
+sampleDataDf
+
+```
+
+Now let's see how the Z-scores differ between the two.
+
+```{r}
+sampleDataDfTidy=sampleDataDf %>% gather(key=type,value=Zscore,-Height,-individual)
+ggplot(sampleDataDfTidy,aes(y=Zscore,x=type,group=individual)) + 
+  geom_point() + geom_line() +
+  geom_hline(yintercept = 0,color='blue',linetype='dashed')
+```
 
