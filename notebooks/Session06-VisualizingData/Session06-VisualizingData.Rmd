@@ -6,10 +6,22 @@ output:
 ---
 
 
-```{r}
+```{r echo=FALSE,messages=FALSE}
 library(ggplot2)
 library(dplyr)
 library(tidyr)
+```
+
+### replotting Tufte's o-ring data
+
+```{r}
+oringDf=read.table('orings.csv',sep=',',header=TRUE)
+
+ggplot(oringDf,aes(x=Temperature,y=DamageIndex)) +
+  geom_point() + xlim(25,85) + ylab('Damage Index') +
+  xlab('Temperature at time of launch') +
+  geom_smooth(se=FALSE,span=1) + ylim(0,12) +
+  geom_vline(xintercept=27.5,size=7,alpha=0.3,color='red')
 ```
 
 ### showing the data
@@ -66,10 +78,16 @@ dfmean=NHANES_adult %>% group_by(Gender) %>% summarise(Height=mean(Height))
 
 ggplot(dfmean,aes(x=Gender,y=Height)) + 
   geom_bar(stat="identity",color='gray') + 
-  coord_cartesian(ylim=c(130,205)) +
+  coord_cartesian(ylim=c(0,210)) +
+  ggtitle('Bar graph') + 
+  theme(aspect.ratio=1)  
+
+ggplot(dfmean,aes(x=Gender,y=Height)) + 
+  geom_bar(stat="identity",color='gray') + 
+  coord_cartesian(ylim=c(0,210)) +
   ggtitle('Bar graph') + 
   theme(aspect.ratio=1)  +
-  geom_jitter(data=NHANES_adult,aes(x=Gender,y=Height),width=0.1,alpha=0.3)
+  geom_jitter(data=NHANES_adult,aes(x=Gender,y=Height),width=0.1,alpha=0.1)
 
 
 
@@ -78,10 +96,10 @@ ggplot(NHANES_adult,aes(x=Gender,y=Height)) +
   ggtitle('Violin plot') + theme(aspect.ratio=1)
 
 ggplot(NHANES_adult,aes(x=Gender,y=Height)) + 
-  geom_boxplot() + 
+  geom_boxplot() +  
   ggtitle('Box plot') + theme(aspect.ratio=1)
 
-ggplot(subset(NHANES_adult,Gender=='female'),aes(Height))+
+ggplot(subset(NHANES_adult,Gender=='female'),aes(Height)) +
   geom_histogram(binwidth = 1)
 
 ```
@@ -125,12 +143,12 @@ Examples of good or bad data/ink ratios
 
 ```{r}
 ggplot(df,aes(x,yDirty)) + 
-  geom_point() +
+  geom_point(size=2) +
   geom_smooth(method='lm',se=FALSE)+ ylim(-5,20) +
   ylab('Dental health') + xlab('Time spent flossing')
 
 ggplot(df,aes(x,yDirty)) + 
-  geom_point() +
+  geom_point(size=0.5) +
   geom_smooth(method='lm',se=FALSE)+ ylim(-5,20) +
   ylab('Dental health') + xlab('Time spent flossing') +
   theme(panel.grid.major = element_line(colour = "black",size=1)) +
@@ -167,5 +185,19 @@ ggplot(gasPriceData,aes(year,gasPrice)) +
   geom_line(aes(color='Nominal'),size=1) +
   geom_line(aes(year,gasPrice1950Dollars,color='Adjusted'),size=1) +
   ylab('Gasoline prices') + xlab('year') 
+```
+
+### zero on the Y axis
+
+A demonstration of why one should always use zero as the base for bar graphs.
+
+```{r}
+ggplot(data.frame(y=c(100,95),x=c('condition 1','condition 2')),aes(x=x,y=y)) + 
+  geom_col() 
+
+ggplot(data.frame(y=c(100,95),x=c('condition 1','condition 2')),aes(x=x,y=y)) + 
+  geom_col() + coord_cartesian(ylim=c(92.5,105))
+
+
 ```
 
