@@ -5,27 +5,48 @@ output:
     df_print: paged
 ---
 
+```{r echo=FALSE,message=FALSE}
+library(NHANES)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+options(scipen = 999)  # turn off scientific notation
+
+```
 
 Let's start by looking at the height of adults in NHANES, to explore the use of sampling. We will assume that our population of interest is all adults in NHANES, and we will examine how well different estimators work in terms of our two criteria: bias and variance.
 
 
 ```{r}
-library(NHANES)
-library(dplyr)
-library(ggplot2)
-library(tidyr)
-
-
-options(scipen = 999)  # turn off scientific notation
 
 NHANES$isChild <- NHANES$Age<18
 NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
-
+NHANES_clean=subset(NHANES,subset=Height!='NA')
 print(paste('Population height: mean = ',mean(NHANES_adult$Height)))
 print(paste('Population height: std deviation = ',sd(NHANES_adult$Height)))
 
 
 ```
+
+We can take a single sample using the sample_n function from dplyr, which will sample a specified number of individuals from the population.  Here we sample 10 of them
+
+```{r}
+exampleSample = NHANES_adult %>% sample_n(10)
+dim(NHANES_adult)
+dim(exampleSample)
+exampleSample
+print(paste('Sample height: mean = ',mean(exampleSample$Height)))
+print(paste('Sample height: std deviation = ',sd(exampleSample$Height)))
+
+```
+
+By default, sample_n() will not replace the sampled individuals; that is, once a person is selected, they can't be selected again.  Next session we will see an example of cases when we want to sample *with replacement* - that is, when someone is selected, they get put back into the pile so that they can possibly be selected again.  Here is an example where we are selecting amongst restaurants, with replacement; note that if we were sampling without replacement, we could only sample up to 4 observations, because at that point we would have exhausted our population of restaurants.
+
+```{r}
+restaurantDf = data.frame(restaurant=c('Chipotle','KFC','Tacolicious','Coupa'))
+restaurantDf %>% sample_n(20,replace = TRUE)
+```
+
 
 Now let's take a bunch of samples of 100 individuals, compute the mean, and look at the distribution of those values (which we call the "sampling distribtion").
 
@@ -62,7 +83,7 @@ sampMeans_df=data.frame(sampMeans=sampMeans)
 ggplot(sampMeans_df,aes(sampMeans)) +
   geom_histogram(data=NHANES_adult,aes(Height,..density..),bins=500,col='gray',fill='gray') +
   geom_histogram(aes(y=..density..*0.2),bins=500,col='blue',fill='blue') +
-  xlab('Height (inches)') 
+  xlab('Height (inches)') + geom_vline(xintercept = mean(NHANES_adult$Height))
 ```
 
 Now let's see if the sample mean is really the "best" estimator of the population mean.  
@@ -95,29 +116,90 @@ ggplot(sampdataGrouped, aes(x=key,y=sd)) +
 
 The CLT tells us that parameter estimates from any distribution will be normally distributed, assuming that the sample size is large enough.
 
-To test this, let's work with the data from all individuals in the NHANES dataset, which is highly skewed.  Let's take a bunch of samples from this distribution, and then look at the shape of the sampling distribution of the mean.
+
+For a simple example, we can look at data sampled from a very no-normal discrete distribution.  Let's say that we have a die that is highly unfair, with a probability distribution for the 6 sides as follows:
+
+```{r}
+unfairDieProbDist = c(6,5,4,3,2,1) #c(3,0,1,2,0,3)
+# normalize by the sum
+unfairDieProbDist = unfairDieProbDist/sum(unfairDieProbDist)
+
+ggplot(data.frame(x=seq(1,6),pdist=unfairDieProbDist),aes(x=x,y=pdist)) + 
+  geom_bar(stat='identity') + ylab('probability') + xlab('outcome')
+```
+
+Now let's sample repeatedly from this distribution and take the mean of each sample, and then look at the resulting distribution of sample means. Let's start with a large sample size of 100 rolls per sample.
+
+```{r}
+sampSize=10
+nsamps=5000
+sampMeans=array(NA,nsamps)
+
+for (i in 1:nsamps){
+  samp=sample(6,sampSize,replace=TRUE,prob=unfairDieProbDist)
+  sampMeans[i]=mean(samp)
+}
+
+sampMeansDf=data.frame(sampMeans=sampMeans)
+
+ggplot(sampMeansDf,aes(sampMeans)) +
+  geom_histogram(aes(y=..density..),bins=100,col='blue',fill='blue') +
+  xlab('Mean roll') 
+
+
+```
+
+
+We can also see this in real data. Let's work with the Height data from all individuals in the NHANES dataset, which is highly skewed.  Let's take a bunch of samples from this distribution, and then look at the shape of the sampling distribution of the mean.
 
 ```{r}
 
-sampSize=100
-nsamps=5000
+sampSize=250
+nsamps=2500
 sampMeansFull=array(NA,nsamps)
 
 for (i in 1:nsamps){
-  NHANES_sample=sample_n(NHANES,sampSize)
+  NHANES_sample=sample_n(NHANES_clean,sampSize)
   sampMeansFull[i]=mean(NHANES_sample$Height)
 
 }
 sampMeansFullDf=data.frame(sampMeans=sampMeansFull)
 
 ggplot(sampMeansFullDf,aes(sampMeans)) +
-  geom_histogram(data=NHANES,aes(Height,..density..),bins=500,col='gray',fill='gray') +
-  geom_histogram(aes(y=..density..*0.2),bins=500,col='blue',fill='blue') +
-  xlab('Height (inches)') 
+  geom_histogram(data=NHANES_clean,aes(Height,..density..),bins=500,col='gray',fill='gray') +
+  geom_histogram(aes(y=..density..*0.18),bins=500,col='blue',fill='blue') +
+  xlab('Height (inches)')  + ylim(0,0.065) +
+  annotate('text',x=100,y=0.055,label=sprintf('sample size = %d',sampSize),size=5,hjust=0) +
+  annotate('text',x=100,y=0.05,label=sprintf('std error (observed) = %.03f',sd(sampMeansFull)),size=5,hjust=0) +
+  annotate('text',x=100,y=0.045,label=sprintf('std error (computed) = %.03f',sd(NHANES_clean$Height)/sqrt(sampSize)),size=5,hjust=0)
 
+# add quantiles of standard normal
+normalCDF=data.frame(x=seq(min(sampMeansFull),
+                           max(sampMeansFull),.05))
+normalCDF = normalCDF %>% mutate(cdf= pnorm(x,mean=mean(NHANES_clean$Height),
+                                     sd=sd(NHANES_clean$Height)/sqrt(sampSize)))
+
+ggplot(sampMeansFullDf,aes(sampMeans)) + 
+  stat_ecdf(color='blue',linetype='dotted',size=1) + 
+  geom_line(data=normalCDF,aes(x=x,y=cdf),size=1) + xlim(min(sampMeansFull), max(sampMeansFull)) +
+  annotate('text',x=158,y=0.8,label=sprintf('sample size = %d',sampSize),size=5,hjust=0) 
+
+# from https://mgimond.github.io/ES218/Week06a.html#drawing-a-normal-q-q-plot-from-scratch
+y     <- quantile(sampMeansFull, c(0.25, 0.75)) # Find the 1st and 3rd quartiles
+x     <- qnorm( c(0.25, 0.75))         # Find the matching normal values on the x-axis
+slope <- diff(y) / diff(x)             # Compute the line slope
+int   <- y[1] - slope * x[1]           # Compute the line intercept
+
+ggplot(sampMeansFullDf,aes(sample=sampMeans)) + geom_qq() + 
+  geom_abline(intercept=int, slope=slope)
+
+  
 ```
 
-How big is large enough?  Try out the demo (clt_demo under psych10-shinyapps).
+How big is large enough?  Try out the demo using these commands:
+
+- library(shiny)
+- runGitHub("psych10/psych10",subdir="inst/clt_demo/")
 
 
 ### Confidence intervals
