@@ -30,7 +30,7 @@ nMatchesPredicted=mean(birthdayData$Expected)*nstudents
 nMatchesPredicted
 ```
 
-Now let's see how many we would have expected.  The math to compute this is fairly complicated, so let's simulate it instead.
+Now let's see how many we would have expected. Let's simulate it first.
 
 ```{r}
 
