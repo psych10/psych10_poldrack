@@ -12,12 +12,11 @@ respData=read.table('Memory recall test.csv',header=TRUE,sep=',',
 respData$nRecalled=NULL
 respData$nHits=0
 
+# last item in this list is the DRM critical lure
 
 listWords=c('fear','temper','hatred','fury','happy',
             'enrage','emotion','rage','hate','mean',
-            'ire','mad','wrath','calm','fight','anger')
-# last item in this list is the DRM critical lure
-listWords=c('dog','fish','dork','bilge','date')
+            'ire','mad','wrath','fight','anger')
 
 itemData=c()
 
