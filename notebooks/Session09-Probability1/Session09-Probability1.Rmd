@@ -1,9 +1,86 @@
 ---
-title: "Alabama election results"
-output: html_notebook
+title: "Session 9: Probability"
+output:
+  html_document:
+    df_print: paged
 ---
 
+```{r echo=FALSE,message=FALSE}
+library(ggplot2)
+```
+
+#### Sets in R
+
+```{r}
+setA=c(1,2,3)
+setB=c(2,3,4,5)
+union(setA,setB)
+```
+
+```{r}
+intersect(setA,setB)
+
+```
+
+
+#### Probability distributions
+
+Plot probability of N heads out of 10 flips
+
+```{r}
+pNheads=dbinom(seq(0,10),10,0.5)
+ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
+  xlab('Number of heads out of 10 flips') + ylab('Probability') 
+```
+
+Color in tail probability for 7+ heads
+
+```{r}
+pNheads=dbinom(seq(0,10),10,0.5)
+ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
+  xlab('Number of heads out of 10 flips') + ylab('Probability') +
+  geom_bar(data=data.frame(n=seq(7,10),pNheads=pNheads[8:11]),aes(x=n,y=pNheads),stat="identity",fill='green') 
+
+
+```
+
+
+Color in tail probability for 7+ heads - using cumulative
+
+```{r}
+pNheads=pbinom(seq(0,10),10,0.5)
+ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
+  xlab('Number of heads out of 10 flips') + ylab('Cumulative probability') +
+  geom_hline(yintercept=pNheads[7],color='blue',linetype='dashed') + 
+  geom_bar(data=data.frame(n=seq(7,10),pNheads=pNheads[8:11]),aes(x=n,y=pNheads),stat="identity",fill='green') 
+
+
+pOver7 = 1 - pbinom(6,10,0.5)
+print(paste('Probability of 7 or more heads out of 10:',pOver7))
+```
+
+Color in tail probability for 3 or fewer heads - lower tail
+
+```{r}
+pNheads=pbinom(seq(0,10),10,0.5)
+ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
+  xlab('Number of heads out of 10 flips') + ylab('Cumulative probability') +
+  geom_hline(yintercept=pNheads[4],color='blue',linetype='dashed') + 
+  geom_bar(data=data.frame(n=seq(0,3),pNheads=pNheads[1:4]),aes(x=n,y=pNheads),stat="identity",fill='green') 
+
+
+p3orLess = pbinom(3,10,0.5)
+print(paste('Probability of 3 or fewer heads out of 10:',p3orLess))
+```
+
+
+#### Election results
 Here we analyze the election results as they came in during the special election for US Senator in Alabama on Dec 12, 2017 (transcribed from https://www.ajc.com/news/national/alabama-senate-race-live-updates-roy-moore-doug-jones/KPRfkdaweoiXICW3FHjXqI/).  
+
 ```{r}
 library(ggplot2)
 library(dplyr)
@@ -16,3 +93,19 @@ ggplot(electionReturns,aes(pctResp,pctVotes,color=candidate)) +
   ylab('Percentage of votes')
 
 ```
+
+#### Law of large numbers
+
+Let's run 100,000 trials of 10 coin flips, and look at how the average empirical probability changes as a fnction of sample size
+
+```{r}
+set.seed(12345)
+nsamples=30000
+sampDf=data.frame(x=seq(nsamples),samples=rbinom(nsamples,10,0.5)/10) %>% mutate(mean=cumsum(samples)/seq_along(samples))
+
+ggplot(sampDf[10:nsamples,],aes(x=x,y=mean)) + 
+  geom_hline(yintercept = 0.5,color='blue',linetype='dashed') +
+  geom_line() + 
+  xlab('Number of trials') + ylab('Estimated probability of heads')
+```
+
