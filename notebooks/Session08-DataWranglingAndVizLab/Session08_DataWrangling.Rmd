@@ -26,12 +26,14 @@ The 29-item ATS has two subscales. The Attitudes Toward Field subscale consists 
 The Attitudes Toward Course subscale consists of the following 9 items:
 2(R), 4(R), 7(R), 8, 12(R), 15(R), 18(R), 25(R), 27(R)
 
+For our purposes, we will just combine all 29 items together, rather than separating them into these subscales.
+
 Let's load the data from the file. First, have a look at the data in the file, to see what separates the different values.  In this case, we see that it is separated by commas, which is known as a "comma-separated value" or CSV file.  We can read this using the read.csv() function.
 
 Note: I have removed the data from the two graduate students in the class and the one 5+ year student, since those would be too easily identifiable.
 
 ```{r}
-attitudeData=read.csv('statsAttitude.txt',stringsAsFactors = FALSE)
+attitudeData=read.csv('https://psych10.github.io/data/Session08_DataWrangling/statsAttitude.txt',stringsAsFactors = FALSE)
 head(attitudeData)
 dim(attitudeData)
 ```
@@ -54,22 +56,25 @@ head(attitudeData)
 ```
 
 
-If you look closely at the data, you can see that there are a couple of survey participants who did not respond to any of the items:
-
-```{r}
-attitudeData[57,]
-```
-
-There are also a few other participants who have occasional missing values.  We can count these up for each participant and present them in a table:
+If you look closely at the data, you can see that some of the participants have some missing responses.  We can count them up for each individual.
 
 ```{r}
 # compute the number of NAs for each participant
 numNAvals=apply(is.na(attitudeData),1,sum)
-table(numNAvals)
 
+# present a table with counts of the number of missing responses
+table(numNAvals)
 ```
 
-There are two participants who are missing all 29 values, and another 5 participants who are missing just one of the values.  There are fancy techniques for trying to guess the value of missing data (known as "imputation") but since the number of participants with missing values is small, let's just drop those participants from the list. 
+We can see from the table that there are two participants who are missing responses for all 29 questions.  Let's see which ones, using the which() function which tells us which elements the vector match a particular test.
+
+```{r}
+which(numNAvals==29)
+attitudeData[which(numNAvals==29),]
+```
+
+
+There are fancy techniques for trying to guess the value of missing data (known as "imputation") but since the number of participants with missing values is small, let's just drop those participants from the list. 
 
 Here we are going to use something called a "pipe", which is commonly used within the tidyverse; you can read more [here](http://magrittr.tidyverse.org/). A pipe takes the output from one command and feeds it as input to th next command. In this case, simply writing the name of the data frame (attitudeData) causes it to be input to the drop_na() command following the pipe, and the output from the entire operation is stored in the new variable (attitudeDataNoNA).
 
@@ -117,7 +122,7 @@ ggplot(attitudeDataTidy,aes(ResponseRaw,..density..)) +
   geom_histogram(binwidth=0.5)
 ```
 
-This looks like responses are all over the place - but remember from above that some of the items require recoding.  The raw responses were on the 1-7 scale, which for those items we need to reverse by subtracting the raw score from 8 (such that 7 becomes 1 and 1 becomes 7).  To do this, we first need to create a column that contains the question numbers.  Then we reverse the responses for those items that are in our list of reverse-scored items.
+This looks like responses are all over the place - but remember from above that some of the items require recoding.  The raw responses were on the 1-7 scale, which for those items we need to reverse by subtracting the raw score from 8 (such that 7 becomes 1 and 1 becomes 7).  To do this, we first need to create a column that contains the question numbers.For this we use the mutate() function, which creates new variables based on the existing variables.  Then we reverse the responses for those items that are in our list of reverse-scored items. We do this using the %in% operator, which tests whether a vector contains a specific value.
 
 ```{r}
 # start by filling in the new Response variable with the Raw responses
@@ -134,7 +139,7 @@ attitudeDataTidy$Response[attitudeDataTidy$Qnum %in% reverse_score_attitude] = 8
 
 Whenever we do an operation like this, it's good to check that it actually worked correctly.  We can do that by identifying all of the question numbers where the raw response is different from the final response, and make sure that they match the set of items that we meant to change.  It's easy to make mistakes in coding, which is why it's important to check your work as well as you can.
 
-One thing we can use to help with checking is what is called an "assertion".  This is basically our way of saying "X should be true, and if it's not, please let me know!". 
+One thing we can use to help with checking is what is called an "assertion".  This is basically our way of saying "X should be true, and if it's not, please let me know!".  If the argument to the assertion is false, then it will raise an error in R.
 
 Let's start with an easy version of this - let's make sure that there are no responses outside of the 1-7 scale that we expect, and make sure that no one specified a year outside of the 1-4 range.  (We know these are true, but this shows how we could confirm it if we weren't sure.)
 
@@ -145,7 +150,7 @@ assert_that(all(attitudeDataTidy$Year %in% c(1:4)))
 
 ```
 
-Now let's try the more complex example, where we check that the question numbers for reversed items are correct.
+Now let's try the more complex example, where we check that the question numbers for reversed items are correct. The subset() function allows us to select only a subset of cases; in this example we are only selecting items where the raw response is different from the response, which means that its value has been reversed.  Then we make sure that its question number is part of the list of questions that should have been reversed.
 
 ```{r}
 reversedItemsDf=attitudeDataTidy %>% subset(Response != ResponseRaw) 
@@ -178,7 +183,7 @@ Now we can also separate these out by year
 participantSummaryByYear=attitudeDataTidy %>% group_by(Year) %>%
   summarize(meanResponse=mean(Response),sd=sd(Response),n=n()/29)
 
-ggplot(participantSummary,aes(x=year,y=meanResponse)) +
-  geom_smooth(method='lm')
+ggplot(participantSummaryByYear,aes(x=Year,y=meanResponse)) +
+  geom_line(stat="identity")
 ```
 
