@@ -141,11 +141,11 @@ We can also plot the average squared error for the four different models.
 ```{r}
 error_df=data.frame(error=c(mean(error**2),mean(error_mean**2),
                             mean(error_age**2),mean(error_age_gender**2)))
-row.names(error_df)=c('mode','mean','age','age+gender')
+row.names(error_df)=c('mode','mean','mean+age','mean+age+gender')
 error_df$RMSE=sqrt(error_df$error)
 ggplot(error_df,aes(x=row.names(error_df),y=RMSE)) + 
   geom_col() +ylab('root mean squared error') + xlab('Model') +
-  scale_x_discrete(limits = c('mode','mean','age','age+gender'))
+  scale_x_discrete(limits = c('mode','mean','mean+age','mean+age+gender'))
 ```
 
 This shows us that adding age to the model helped a lot, while adding gender to the model only helped a little bit.
