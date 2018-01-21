@@ -1,0 +1,312 @@
+---
+title: 'Session 11: Probability R Lab'
+output:
+  html_document:
+    df_print: paged
+---
+
+In this lab, we will go over how to work with probabilities in R.
+
+
+```{r echo=FALSE,message=FALSE}
+library(ggplot2)
+library(NHANES)
+library(dplyr)
+library(tidyr)
+```
+
+### Simple probabilities
+
+Let's start by asking the question that the Chevalier de Mere asked Blaise Pascal:  Which is more likely - rolling at least one six in four throws of a single die, or rolling at least one double-six in 24 throws of a pair of dice?
+
+Let's start by simulating it.  We will first create function that will generate throws of either one or two dice. 
+
+```{r}
+# simulate one die
+simChevalierOne = function(nTrials=10000){
+    nThrowsPerTrial=4
+    critItem=6 # single six
+
+    throwData=matrix(NA,nTrials,6)
+    for (i in 1:nTrials){
+        throw=sample.int(6,nThrowsPerTrial,replace=TRUE)
+        throwData[i,]=tabulate(throw,nbins=6)
+     }
+    
+    propOutcome=data.frame(throwData) %>% 
+        gather() %>% 
+        subset(key==sprintf('X%d',critItem)) %>% 
+        summarize(mean=mean(value>0))
+  return(propOutcome$mean)
+}
+
+# simulate two dice
+simChevalierTwo = function(nTrials=10000){
+    nThrowsPerTrial=24
+    critItem=36 # double six
+    
+    throwData=matrix(NA,nTrials,36)
+    for (i in 1:nTrials){
+      throw=sample.int(6,nThrowsPerTrial,replace=TRUE)*sample.int(6,nThrowsPerTrial,replace=TRUE)
+        throwData[i,]=tabulate(throw,nbins=36)
+    }
+    
+      propOutcome=data.frame(throwData) %>% 
+        gather() %>% 
+        subset(key==sprintf('X%d',critItem)) %>% 
+        summarize(mean=mean(value>0))
+  return(propOutcome$mean)
+}
+
+```
+
+Now let's compute the probabilities using probability theory and compare the results to those obtained using the simulation.
+
+```{r}
+p_no_sixes_in_four_throws = (5/6)**4
+p_at_least_one_six_in_four_throws=1-p_no_sixes_in_four_throws
+print('at least one six in four throws of a single die')
+print(paste('theory:',p_at_least_one_six_in_four_throws))
+oneDie=simChevalierOne()
+print(paste('simulation:',oneDie))
+
+
+p_no_double_sixes_in_twentyfour_throws = (35/36)**24
+p_at_least_one_double_six_in_twentyfour_throws=1-p_no_double_sixes_in_twentyfour_throws
+print('at least one double-six in 24 throws')
+print(paste('theory:',p_at_least_one_double_six_in_twentyfour_throws))
+twoDie=simChevalierTwo()
+print(paste('simulation:',twoDie))
+
+```
+
+### Conditional probabilities
+
+Let's use NHANES to look at some examples of conditional probability.
+
+First, let's figure out the probability of living in a house with less than 4 rooms.
+
+```{r}
+pSmallHouse=mean(NHANES$HomeRooms<4,na.rm=TRUE)
+pSmallHouse
+```
+
+Now let's see the probability of household income less than $20,000.
+
+```{r}
+pLowIncome=mean(NHANES$HHIncomeMid<20000,na.rm=TRUE)
+pLowIncome
+```
+
+Those are both fairly uncommon.  Now let's look at the conditional probability of living in a small house, given that one has a low income.  Remember that conditional probability is computed as:
+
+\[P(A|B) = \frac{P(A\cap B)}{P(B)}
+\]
+
+So the conditional probility of living in a small house, given that one has a low income would be:
+\[P(small\, house|low\, income) = \frac{P(small\, house\ \cap low\, income)}{P(low\, income)}
+\]
+
+We can compute this as follows:
+
+```{r}
+NHANES_lowincome = subset(NHANES,HHIncomeMid<20000)
+pSmallHouseGivenLowIncome = mean(NHANES_lowincome$HomeRooms<4)
+pSmallHouseGivenLowIncome
+```
+
+It seems that the probability of living in a small house given that one has low income is substantially higher than the overall probability of living in a small house.  That tells us that these two variables are *not* independent, since independence implies that:
+
+\[
+p(A|B) = P(A)
+\]
+
+
+### Bayes theorem
+
+The analysis above showed us the likelihood of living in a small house given that one has low income, but what if we want to know the opposite: that is, what if we want to know the likelihood of having a low income, given that one lives in a small house.  We could compute this as we did above, but instead let's first use Bayes Rule to compute it from the information above. Remember Bayes Rule:
+\[
+p(A|B) = \frac{P(B|A)*P(A)}{P(B)}
+\]
+
+In our case, A is having a low income and B is living in a small house.  We already know everything we need to know from above:
+\[
+pLowIncomeGivenSmallHouse = \frac{pSmallHouseGivenLowIncome*pLowIncome}{pSmallHouse}
+\]
+
+```{r}
+pLowIncomeGivenSmallHouse = (pSmallHouseGivenLowIncome*pLowIncome)/pSmallHouse
+pLowIncomeGivenSmallHouse
+```
+
+This shows us that the likelihood of having low income is more than twice as high for people who live in small houses, but nonetheless is is still fairly low - only about 1/3.
+
+### Odds
+
+Remember that the odds reflect a ratio of somethign happening to it not happening:
+
+\[
+odds = \frac{P(A)}{P(\sim A)}
+\]
+
+Let's compute the odds of having low income, given that one lives in a small house.
+
+```{r}
+oddsLowIncomeGivenSmallHouse = pLowIncomeGivenSmallHouse/(1-pLowIncomeGivenSmallHouse)
+oddsLowIncomeGivenSmallHouse
+```
+
+This shows that one is actually less likely to have low income than not, even if one lives in a small house. However, this is not really want we want to know: How much does living in a small house tell us about a person's likelihood of having low income?  We can compute that using the Bayesian likelihood ratio:
+
+```{r}
+priorOdds=pLowIncome/(1-pLowIncome)
+posteriorOdds=pLowIncomeGivenSmallHouse/(1-pLowIncomeGivenSmallHouse)
+
+lrLowIncomeGivenSmallHouse = posteriorOdds/priorOdds
+lrLowIncomeGivenSmallHouse
+```
+
+This tell us how my we learned about one likelihood of having low income, given that they live in a small house: specifically, they are almost 3 times more likely to have low income given that they live in a small house, compared to not knowing what kind of house they live in.  
+
+### Probability distributions
+
+Probability distributions are fundamental to statistics, because they let us describe how likely particular events or outcomes are.
+
+There are two kinds of probability distributions that we will work with, both of which you have already encountered: empirical distributions, and theoretical distributions.
+
+#### Empirical probability distributions
+
+An empirical probability distribution is simply a description of a set of outcomes in terms of probabilities.
+
+Let's say that we want to know which of the following sequence of coin flips is more likely to happen first after we start flipping repeatedly: HTT or HTH?  What do you think the answer is?
+
+This problem was made famous by this Ted Talk: https://www.ted.com/talks/peter_donnelly_shows_how_stats_fool_juries
+
+Let's write a function that flips coins until it finds a particular pattern, and return the number of flips it took to get there. We will refer to heads as 1 and tails as 0.
+
+```{r}
+
+flipTest = function(pattern,maxFlips=10000){
+  i=2
+  patternFound=FALSE
+  # initialize with a first set of three throws
+  while (!patternFound){
+    i=i+1
+    if (i==3){
+        testPattern=rbinom(3,1,0.5)
+    } else {
+      testPattern[1:2]=testPattern[2:3]
+      testPattern[3]=rbinom(1,1,0.5)
+    }
+    if (all(pattern==testPattern)){
+      patternFound=TRUE
+    }
+  }
+  i
+}
+```
+
+
+Now let's run it 10000 times and see what the distribution looks like for each of the patterns.
+
+```{r}
+nruns=50000
+distHTT=array(NA,nruns)
+distHTH=array(NA,nruns)
+
+for (i in 1:nruns){
+  distHTT[i]=flipTest(c(1,0,0))
+  distHTH[i]=flipTest(c(1,0,1))
+}
+flipDf=data.frame(distHTH,distHTT) %>% gather(key=pattern,value=numberOfFlips)
+```
+
+Now that we have the data, we can look at the probability distribution of number of flips for each pattern. Let's overlay them for direct comparison.
+
+```{r}
+ggplot(flipDf,aes(numberOfFlips,group=pattern,color=pattern)) + geom_freqpoly(aes(y=..density..),binwidth=1) + 
+  xlim(3,max(flipDf$numberOfFlips)) +
+  annotate('text',x=50,y=0.1,label=sprintf('Mean(HTH) = %.2f',mean(distHTH))) +
+  annotate('text',x=50,y=0.09,label=sprintf('Mean(HTT) = %.2f',mean(distHTT)))
+```
+
+Why does this happen?  Think of if this way:
+
+- You are waiting for HTT, and you have the first two (HT).  If the next one is a T, then you are done.  But if it's an H, you have already started your next possible HTT.
+- You are waiting for an HTH and you have the first two(HT). If the next one is an H, then you are you done. If it's a T, then you have to wait yet another flip to see if you get an H to start then next possible HTH.
+
+
+#### Theoretical probability distributions
+
+We have already seen examples of several theoretical distributions, including the binomial distribution (in the context of coin flips) and the normal distribution (in the context of height in the NHANES dataset).  Here we will dig a bit deeper into the details of the normal distribution.  
+
+
+First, let's look at the help for normal distribution.
+
+```{r}
+?Normal
+```
+
+You see that it defines four functions relevant to the normal distribution:
+
+- dnorm(): the density function
+- pnorm(): the cumulative distribution function (CDF)
+- qnorm(): the quantile function
+- rnorm(): the function to generate random numbers sampled from a normal distribution
+
+We don't use the normal density function very often, except for creating figures to show the shape of the normal distribution :-)  
+
+On the other hand, we will very often use the cumulative distribution function (CDF), because we often want to know how likely it is to find a value equal to or more extreme than our observed value; in particular, this will play a central role in statistical hypothesis testing.
+
+You can obtain the CDF for the normal distribution using the pnorm() function:
+
+```{r}
+zDf=data.frame(z=seq(-4,4,0.01))
+zDf = zDf %>% mutate(normalCDF = pnorm(z))
+ggplot(zDf,aes(x=z,y=normalCDF)) + geom_line()
+
+```
+
+If you want to find the probability of a value equal to or *lower* than some Z score, you can simply plug the Z score into pnorm():
+
+```{r}
+pLessThan2 = pnorm(2)
+pLessThan2
+```
+
+If you want to find the probability of a value equal to or *greater* than some Z score, you can use pnorm() and then subtract the result from 1:
+
+```{r}
+pGreaterThan2 = 1 - pnorm(2)
+pGreaterThan2
+```
+
+Sometimes we want to go in the other direction; that is, we want to know what Z score cuts off a particular portion of the distribution.  For example, let's say that we want to know the Z score for which only 1% of values are lower  We can use the quantile function to find this:
+
+```{r}
+zOnePercent = qnorm(0.01)
+zOnePercent
+```
+
+We can also find the Z for which only 1% of values are higher, by subtracting the probability from 1 and using qnorm():
+
+
+```{r}
+zOnePercent = qnorm(1 - 0.01)
+zOnePercent
+```
+
+We will very often want to generate data that are randomly sampled from a normal distribution. We can do this using the rnorm() function.  The argument to the function specifies the number of values to be generated.
+
+```{r}
+randomSamples=rnorm(10)
+randomSamples
+```
+
+We can also generate values with a specified mean and standard deviation.
+```{r}
+randomSamples=rnorm(10,mean=100,sd=10)
+randomSamples
+
+```
+
