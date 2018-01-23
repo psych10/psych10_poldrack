@@ -87,10 +87,13 @@ The summarize() function creates a summary of the data, with the new variables b
 
 ```{r}
 # compute the number of NAs for each participant
-attitudeData = attitudeData %>% mutate(numNA=rowSums(is.na(.[2:30])))
+attitudeData = attitudeData %>% 
+  mutate(numNA=rowSums(is.na(.[2:30])))
 
 # present a table with counts of the number of missing responses
-attitudeData %>% group_by(numNA) %>% summarise(n=n())
+attitudeData %>% 
+  group_by(numNA) %>% 
+  summarise(n=n())
 
 ```
 
@@ -111,7 +114,8 @@ select() and filter() are very similar - select() works on columns (i.e. variabl
 ```{r}
 # this is equivalent to drop_na(attitudeData)
 attitudeDataNoNA = attitudeData %>% 
-  drop_na() %>% select(-numNA)
+  drop_na() %>% 
+  select(-numNA)
 
 dim(attitudeDataNoNA)
 ```
@@ -170,8 +174,10 @@ Then we reverse the responses for those items that are in our list of reverse-sc
 ```{r}
 reverse_score_attitude=c(6,10,14,16,20,28,2,4,7,12,15,18,25,27)
 
-attitudeDataTidy = attitudeDataTidy %>% mutate(Response=ifelse(Qnum %in% reverse_score_attitude,
-                                                               8-ResponseRaw,ResponseRaw))
+attitudeDataTidy = attitudeDataTidy %>% 
+  mutate(Response=ifelse(Qnum %in% reverse_score_attitude,
+                         8-ResponseRaw,
+                         ResponseRaw))
 
 #attitudeDataTidy$Response[attitudeDataTidy$Qnum %in% reverse_score_attitude] = 8 - attitudeDataTidy$ResponseRaw[attitudeDataTidy$Qnum %in% reverse_score_attitude]  
 
