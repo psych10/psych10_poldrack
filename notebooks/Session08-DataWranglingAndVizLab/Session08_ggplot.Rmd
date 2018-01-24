@@ -17,7 +17,6 @@ How do we go from a collection of variables (be they nominal, ordinal, interval,
 
 Here are some of my favorite examples:
 
-
 * I used to work in a lab that studied dementia, and we had a patient come in who was an artist. She transformed musical, mathematical, and neurological phenomena into paintings.
 
     * Bolero 
@@ -36,7 +35,7 @@ Here are some of my favorite examples:
     ![](https://pbs.twimg.com/media/DT2M088VAAAc6dD.jpg)
 
 
-## The grammer of graphics
+## The grammar of graphics
 or, the "gg" in ggplot
 
 Each language has a grammar consisting of types of words and the rules with which to string them together into sentences. If a sentence is grammatically correct, we're able to parse it, even though that doesn't ensure that it's interesting, beautiful, or even meaningful. 
@@ -69,7 +68,7 @@ Load ggplot and choose a theme you like
 
 ```{r}
 library(ggplot2)
-library(dplyr)
+suppressMessages(library(dplyr))
 
 theme_set(theme_bw()) # I like this fairly minimal one
 ```
@@ -93,7 +92,7 @@ Figuring out *how* to highlight a comparison and include relevant variables usua
 
 ## Plotting the distribution of a single variable
 
-How do you choose which **geom** to use? ggplot allows you to choose from a number of geoms (short for geometries). This choice will determine what sort of plot you create. 
+How do you choose which **geometry** to use? ggplot allows you to choose from a number of geometries. This choice will determine what sort of plot you create. 
 
 ### Histogram
 
@@ -111,25 +110,25 @@ ggplot(mpg, aes(displ)) +
   geom_density()
 ```
 
-A note on defaults: The default statistic (or "stat") underlying geom_density is called "density" -- not surprising. The default stat for geom_historam is "count". What do you think would happen if you overrode the default and set stat="count"?
+A note on defaults: The default statistic (or "stat") underlying `geom_density` is called "density" -- not surprising. The default stat for `geom_histogram` is "count". What do you think would happen if you overrode the default and set `stat="count"`?
 
 ```{r}
 ggplot(mpg, aes(displ)) +
-  geom_density(stat="count")
+  geom_density(stat = "count")
 ```
 
-What we discover is that the *geometric* difference between geom_histogram and geom_density can actually be generalized. Geom_histogram is a shortcut for working with geom_bar, and geom_density is a shortcut for working with geom_line. 
+What we discover is that the *geometric* difference between `geom_histogram` and `geom_density` can actually be generalized. `geom_histogram` is a shortcut for working with `geom_bar`, and `geom_density` is a shortcut for working with `geom_line`. 
 
 ### Bar vs. line plots
 
 ```{r}
 ggplot(mpg, aes(displ)) +
-  geom_bar(stat="count")
+  geom_bar(stat = "count")
 ```
 
 ```{r}
 ggplot(mpg, aes(displ)) +
-  geom_line(stat="density")
+  geom_line(stat = "density")
 ```
 
 ## Plots with two variables
@@ -152,7 +151,7 @@ What if we wanted to add another variable into the mix? Maybe the *year* of the 
 ```{r}
 mpg$year <- factor(mpg$year) # first, year needs to be converted to a factor
 
-ggplot(mpg, aes(manufacturer, displ, fill=year)) +
+ggplot(mpg, aes(manufacturer, displ, fill = year)) +
   geom_bar(stat = "summary", fun.y = "mean")
 ```
 By default, the bars are *stacked* on top of one another. If you want to separate them, you can change the `position` argument form its default to "dodge".
@@ -166,7 +165,7 @@ For a less visually cluttered plot, let's try **facetting**. This creates *subpl
 
 ```{r}
 ggplot(mpg, aes(manufacturer, displ)) +
-  facet_grid(year~.) + # we split up our bar plot into a series of plots, one per class
+  facet_grid(year ~ .) + # split up the bar plot into two
   geom_bar(stat = "summary", fun.y = "mean")
 ```
 
@@ -188,16 +187,19 @@ Now, let's do something a bit more complex, but much more useful -- let's create
 ```{r}
 # summarise data
 mpg_summary <- mpg %>%
-  group_by(manufacturer) %>% # group the data by car manufacturer
-  summarise(n = n(), # get the count for each group
-            mean_displ = mean(displ), # get the mean of each group (what we did earlier with stat="summary")
-            sd_displ = sd(displ)) # get the standard deviation of each group
+  group_by(manufacturer) %>% 
+  summarise(n = n(), 
+            mean_displ = mean(displ), 
+            sd_displ = sd(displ))
 
-limits <- limits <- aes(ymin=mean_displ-1.96*sd_displ/sqrt(n), 
-              ymax=mean_displ+1.96*sd_displ/sqrt(n)) # compute the upper and lower limits of the error bars; we'll talk about how this is done later in the course
+# compute confidence intervals for the error bars
+# (we'll talk about this later in the course!)
+limits <- aes(ymin = mean_displ - 1.96 * sd_displ / sqrt(n), # compute the lower limit of the error bar
+              ymax = mean_displ + 1.96 * sd_displ / sqrt(n)) # compute the upper limit
 
+# now we're giving ggplot the mean for each group, instead of the datapoints themselves
 ggplot(mpg_summary, aes(manufacturer, mean_displ)) +
-  geom_bar(stat = "identity") + # now that we gave ggplot the mean for each group, we set stat = "identity"
+  geom_bar(stat = "identity") + # we set stat = "identity" on the summary data 
   geom_errorbar(limits) # we create error bars using the limits we computed above
 ```
 
@@ -210,7 +212,7 @@ The plot we just created is nice and all, but it's tough to look at. The bar plo
 ```{r}
 ggplot(mpg_summary, aes(manufacturer, mean_displ)) +
   geom_point() + # switch to point instead of bar to minimize ink used
-  geom_errorbar(limits, width=0) # remove the horizontal parts of the error bars
+  geom_errorbar(limits, width = 0) # remove the horizontal parts of the error bars
 ```
 
 Looks a lot cleaner, but our points are all over the place. Let's make a final tweak to make *learning something* from this plot a bit easier.
@@ -221,7 +223,7 @@ mpg_summary_ordered <- mpg_summary %>%
 
 ggplot(mpg_summary_ordered, aes(manufacturer, mean_displ)) +
   geom_point() + 
-  geom_errorbar(limits, width=0) 
+  geom_errorbar(limits, width = 0) 
 
 ```
 
@@ -241,7 +243,7 @@ We can add layers of data onto this graph, like a *line of best fit*. We use a g
 ```{r}
 ggplot(mpg, aes(displ, hwy)) +
   geom_point() +
-  geom_smooth(color="black")
+  geom_smooth(color = "black")
 ```
 
 We can add on points and a smooth line for another set of data as well (efficiency in the city instead of on the highway).
