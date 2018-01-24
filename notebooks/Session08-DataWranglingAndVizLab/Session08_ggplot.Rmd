@@ -1,0 +1,255 @@
+---
+title: 'Session 8: Visualization with ggplot'
+author: Anna Khazenzon
+date: January 26, 2018
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  html_notebook: 
+    toc: yes
+    toc_float: yes
+---
+
+## From variables to visuals
+
+How do we go from a collection of variables (be they nominal, ordinal, interval, or ratio scale) and turn them into a useful format for *human* consumption? We can aggregate data numerically and come up with summary statistics, or we can piggyback off of our perceptual system to take in complicated relationships between variables through convenient graphical representations. 
+
+Here are some of my favorite examples:
+
+
+* I used to work in a lab that studied dementia, and we had a patient come in who was an artist. She transformed musical, mathematical, and neurological phenomena into paintings.
+
+    * Bolero 
+  ![](https://d1o50x50snmhul.cloudfront.net/wp-content/uploads/2008/04/dn13599-1_567.jpg)
+
+    * Migraine 
+  ![](https://static01.nyt.com/images/2008/04/08/science/brain_600_span.jpg)
+
+* Two designers quantified different parts of their daily lives each week, and sent each other unique graphical representations on postcards.
+
+    * Moments of indecision 
+    ![](https://images-na.ssl-images-amazon.com/images/I/81Wdv%2B1QNzL.jpg)
+
+* Lots of graphs plot data on top of geographical maps. Here's data mapped onto the human body.
+
+    ![](https://pbs.twimg.com/media/DT2M088VAAAc6dD.jpg)
+
+
+## The grammer of graphics
+or, the "gg" in ggplot
+
+Each language has a grammar consisting of types of words and the rules with which to string them together into sentences. If a sentence is grammatically correct, we're able to parse it, even though that doesn't ensure that it's interesting, beautiful, or even meaningful. 
+
+Similarly, plots can be divided up into their core components, which come together via a set of rules. 
+
+These components are 
+
+![](https://blog.gtwang.org/wp-content/uploads/2016/07/ggplot-grammar-of-graphics-stack-1.png)
+
+
+The data are the actual variables we're plotting, which we pass to ggplot through the data argument. As you've learned, ggplot takes a **dataframe** in which each column is a variable.
+
+Now we need to tell ggplot *how* to plot those variables, by mapping each variable to an *axis* of the plot. You've seen that when we plot histograms, our variable goes on the x axis. Hence, we set `x=<variable>` in a call to `aes()` within `ggplot()`. This sets **aesthetics**, which are mappings of data to certain scales, like axes or things like color or shape. The plot still had two axes -- x and y -- but we didn't need to *specify* what went on the y axis because ggplot knew by *default* that it should make a count variable.
+
+How was ggplot able to figure that out? Because of **geometries**, which are *shapes* we use to represent our data. You've seen `geom_histogram`, which basically gives our graph a bar plot shape, except that it also sets the default y axis variable to be `count`. Other shapes include points and lines, among many others.
+
+We'll go over facets, statistics, and coordinates as they come up. Let's start visualizing some data by first  choosing a **theme**, which describes all of the non-data ink in our plot, like grid lines and text.
+
+
+## Getting started
+
+Load ggplot and choose a theme you like
+
+![](https://bookdown.org/asmundhreinn/r4ds-master/images/visualization-themes.png)
+
+*  [ggplot theme reference](http://ggplot2.tidyverse.org/reference/ggtheme.html)
+
+*  [knockoff tech themes](http://www.ggplot2-exts.org/ggtech.html)
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+theme_set(theme_bw()) # I like this fairly minimal one
+```
+
+
+## Let's think through a visualization
+
+Principles we want to keep in mind: 
+
+* Show the data without distortion
+* Use color, shape, and location to encourage comparisons
+* Minimize visual clutter (maximize your information to ink ratio)
+
+The two questions you want to ask yourself before getting started are:
+
+* What type of variable(s) am I plotting?
+* What comparison do I want to make salient for the viewer (possibly myself)?
+
+Figuring out *how* to highlight a comparison and include relevant variables usually benefits from sketching the plot out first.
+
+
+## Plotting the distribution of a single variable
+
+How do you choose which **geom** to use? ggplot allows you to choose from a number of geoms (short for geometries). This choice will determine what sort of plot you create. 
+
+### Histogram
+
+```{r}
+ggplot(mpg, aes(displ)) +
+  geom_histogram(bins = nclass.FD(mpg$displ))
+```
+
+Instead of creating discrete bins, we can look at relative density continuously.
+
+### Density plot
+
+```{r}
+ggplot(mpg, aes(displ)) +
+  geom_density()
+```
+
+A note on defaults: The default statistic (or "stat") underlying geom_density is called "density" -- not surprising. The default stat for geom_historam is "count". What do you think would happen if you overrode the default and set stat="count"?
+
+```{r}
+ggplot(mpg, aes(displ)) +
+  geom_density(stat="count")
+```
+
+What we discover is that the *geometric* difference between geom_histogram and geom_density can actually be generalized. Geom_histogram is a shortcut for working with geom_bar, and geom_density is a shortcut for working with geom_line. 
+
+### Bar vs. line plots
+
+```{r}
+ggplot(mpg, aes(displ)) +
+  geom_bar(stat="count")
+```
+
+```{r}
+ggplot(mpg, aes(displ)) +
+  geom_line(stat="density")
+```
+
+## Plots with two variables
+
+Let's check out engine size by car manufacturer. We'll plot one *continuous* variable by one *nominal* one.
+
+First, let's make a bar plot by choosing the stat "summary" and picking the "mean" function to summarize the data.
+
+```{r}
+ggplot(mpg, aes(manufacturer, displ)) +
+  geom_bar(stat = "summary", fun.y = "mean")
+```
+
+Some manufacturers appear to make cars with smaller engines.
+
+### Adding on variables
+
+What if we wanted to add another variable into the mix? Maybe the *year* of the car is also important to consider. We have a few options here. First, you could map the variable to another **aesthetic**.
+
+```{r}
+mpg$year <- factor(mpg$year) # first, year needs to be converted to a factor
+
+ggplot(mpg, aes(manufacturer, displ, fill=year)) +
+  geom_bar(stat = "summary", fun.y = "mean")
+```
+By default, the bars are *stacked* on top of one another. If you want to separate them, you can change the `position` argument form its default to "dodge".
+
+```{r}
+ggplot(mpg, aes(manufacturer, displ, fill=year)) +
+  geom_bar(stat = "summary", fun.y = "mean", position = "dodge")
+```
+
+For a less visually cluttered plot, let's try **facetting**. This creates *subplots* for each value of the `year` variable.
+
+```{r}
+ggplot(mpg, aes(manufacturer, displ)) +
+  facet_grid(year~.) + # we split up our bar plot into a series of plots, one per class
+  geom_bar(stat = "summary", fun.y = "mean")
+```
+
+### Plotting dispersion
+
+Instead of looking at just the means, we can get a sense of the entire distribution of engine sizes for each manufacturer.
+
+#### Box plot
+```{r}
+ggplot(mpg, aes(manufacturer, displ)) +
+  geom_boxplot()
+```
+
+A **box plot** (or box and whiskers plot) uses quartiles to give us a sense of spread. The thickest line, somewhere inside the box, represents the *median*. The upper and lower bounds of the box (the *hinges*) are the first and third quartiles (can you use them to approximate the interquartile range?). The lines extending from the hinges are the remaining data points, excluding **outliers**, which are plotted as individual points.
+
+#### Error bars
+Now, let's do something a bit more complex, but much more useful -- let's create our own summary of the data, so we can choose which summary statistic to plot and also compute a measure of dispersion of our choosing.
+
+```{r}
+# summarise data
+mpg_summary <- mpg %>%
+  group_by(manufacturer) %>% # group the data by car manufacturer
+  summarise(n = n(), # get the count for each group
+            mean_displ = mean(displ), # get the mean of each group (what we did earlier with stat="summary")
+            sd_displ = sd(displ)) # get the standard deviation of each group
+
+limits <- limits <- aes(ymin=mean_displ-1.96*sd_displ/sqrt(n), 
+              ymax=mean_displ+1.96*sd_displ/sqrt(n)) # compute the upper and lower limits of the error bars; we'll talk about how this is done later in the course
+
+ggplot(mpg_summary, aes(manufacturer, mean_displ)) +
+  geom_bar(stat = "identity") + # now that we gave ggplot the mean for each group, we set stat = "identity"
+  geom_errorbar(limits) # we create error bars using the limits we computed above
+```
+
+Error bars don't always mean the same thing -- it's important to determine whether you're looking at e.g. standard error or confidence intervals (which we'll talk more about later in the course).
+
+##### Minimizing non-data ink
+
+The plot we just created is nice and all, but it's tough to look at. The bar plots add a lot of ink that doesn't help us compare engine sizes across manufacturers. Similarly, the width of the error bars doesn't add any information. Let's tweak which *geometry* we use, and tweak the appearance of the error bars.
+
+```{r}
+ggplot(mpg_summary, aes(manufacturer, mean_displ)) +
+  geom_point() + # switch to point instead of bar to minimize ink used
+  geom_errorbar(limits, width=0) # remove the horizontal parts of the error bars
+```
+
+Looks a lot cleaner, but our points are all over the place. Let's make a final tweak to make *learning something* from this plot a bit easier.
+
+```{r}
+mpg_summary_ordered <- mpg_summary %>%
+  transform(manufacturer = reorder(manufacturer, -mean_displ)) # we sort manufacturers by mean engine size
+
+ggplot(mpg_summary_ordered, aes(manufacturer, mean_displ)) +
+  geom_point() + 
+  geom_errorbar(limits, width=0) 
+
+```
+
+### Scatter plot
+
+When we have multiple *continuous* variables, we can use points to plot each variable on an axis. This is known as a **scatter plot**. You've seen this example in your reading.
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point()
+```
+
+#### Layers of data
+
+We can add layers of data onto this graph, like a *line of best fit*. We use a geometry known as a **smooth** to accomplish this.
+
+```{r}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point() +
+  geom_smooth(color="black")
+```
+
+We can add on points and a smooth line for another set of data as well (efficiency in the city instead of on the highway).
+
+```{r}
+ggplot(mpg) +
+  geom_point(aes(displ, hwy), color = "grey") +
+  geom_smooth(aes(displ, hwy), color = "grey") +
+  geom_point(aes(displ, cty), color = "limegreen") +
+  geom_smooth(aes(displ, cty), color = "limegreen")
+```
