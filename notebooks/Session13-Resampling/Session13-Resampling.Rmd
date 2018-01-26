@@ -7,38 +7,226 @@ output:
 
 In this session we discuss the concept of Monte Carlo simulation and its use in statistics.  
 
+```{r echo=FALSE,messages=FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Distribution of finishing times
+
+Let's say that we want to simulate the distribution of how long it will take for the class to finish the quiz.  Let's pretend that we know the distribution of how long the test will take each individual, and that it is roughly normally distributed with a mean of 5 minutes and a standard deviation.  We know that this can't really be true, since it would imply that some people could finish in negative time, but we can just ignore that for the moment since in this analysis we only care about the longest time, not the shortest.
+
+```{r}
+finishTimeDf=data.frame(finishTime=rnorm(3*150,mean=5,sd=1),
+                        quiz=kronecker(c(1:3),rep(1,150)))
+ggplot(finishTimeDf,aes(finishTime)) + geom_histogram(bins=25) + 
+  facet_grid(. ~ quiz) + xlim(0,10)
+```
+
+What we want to know is: What is the distribution of finishing times for the entire group.  That is, what is the distribution of the maximum time needed for 150 people to finish the quiz.  There is statistical theory can could let us figure this out (see https://en.wikipedia.org/wiki/Generalized_extreme_value_distribution) but we will proceed by simulating it.  
+
+Let's randomly draw 5000 samples of 150 quiz-takers from the normal distribution, and then record the maximum time needed by those students in each group.  To do this efficiently, we can create a function that takes a single sample, and then use the replicate() function to repeat it many times.
+
+```{r}
+set.seed(12345)
+nRuns=5000
+sampSize=150
+
+sampleMax = function(sampSize=150){
+  samp=rnorm(sampSize,mean=5,sd=1)
+  return(max(samp))
+}
+
+maxTime=replicate(nRuns,sampleMax())
+```
+
+Now that we have computed the maximum finishing times we can plot their distribution.
+
+```{r}
+ggplot(data.frame(maxTime=maxTime),aes(maxTime)) + geom_histogram(bins=100)
+mean(maxTime)
+quantile(maxTime,0.99)
+```
+This shows that if the mean time needed to finish the exam is 5 minutes, with a standard deviation of one minute, then we need the exam time to last about 9 minutes if we want to be sure that there is sufficient time (which we define as everyone finishing 99% of the time).
+
+### Functions
+
+In addition to its built in functions, R allows the user to define their own functions as well.  Whenever we are doing some kind of self-contained operation, it's good to turn it into a function, because we can then re-use it more easily.
+
+The structure of a user-defined function is as follows:
+
+myfunction <- function(arg1, arg2, ... ){
+  <R code here>
+  return(object)
+}
+
+The *arguments* (arg1,arg2,...) provide the input to the function. Everything within the squiggly brackets gets executed each time the function is run.  The return() statement provides the output from the function.  
+
+Here is the simplest possible example: This function takes no inputs, and simply returns FALSE.  We will call it naysayer:
+
+```{r}
+naysayer = function() {
+  return(FALSE)
+}
+```
+
+When we run that code, it doesn't do anything that we can see, but it has created the function which we can now use. 
+
+```{r}
+naysayer()
+```
+
+Here is a simple example: Let's build a function that returns the sum of two numbers.
+
+
+```{r}
+
+sumOfTwoNumbers = function(number1,number2) {
+  theSum = number1 + number2
+  return(theSum)
+}
+
+```
+
+ Let's try it out:
+
+```{r}
+sumOfTwoNumbers(12,13)
+```
+```{r}
+combineNumbers = function(number1,number2) {
+ return(c(number1,number2))
+}
+combineNumbers(12,13)
+```
+
+Sometimes we want to give the function a "default" setting but all people to change it if necessary. That's what we did in the sampleMax() function; we set the default value of sampSize to 150, but the user can change if if they wish.  For example, say we wish to only sample 20 observations:
+
+```{r}
+sampleMax(sampSize=20)
+
+```
+
+
 ### Percentiles of a normal distribution
 
 We already know how to compute the 95th percentile of a normal distribution, but let's say that we didn't.  Could we use simulation to determine this?
 
-First, we would generate a large number of random samples from a normal distribution.  
+Let's say that we only know how to make numbers from a uniform random distribution. Let's see what these look like:
 
 ```{r}
-library(ggplot2)
-library(dplyr)
-library(tidyr)
+nSamples=100000
+randomUniform = data.frame(samples=runif(nSamples))
 
-samples=data.frame(samples=rnorm(1000000))
-
-ggplot(samples,aes(samples)) +
-  geom_histogram(bins=100)
+ggplot(randomUniform,aes(samples)) + geom_histogram(bins=500) + xlab('Value')
 ```
 
-Let's compare the 95th percentile of these samples to the theoretical 95th percentile of the normal distribution:
+Weibull example
 
 ```{r}
-pct_dist=quantile(samples$samples,0.95)
-print(paste('95th percentile of samples:',pct_dist))
-pct_theoretical=qnorm(0.95)
-print(paste('95th percentile of normal distribution:',pct_theoretical))
+randomUniform = randomUniform %>% mutate(weibull=qweibull(samples,1.5,1))
+ggplot(randomUniform,aes(weibull)) + geom_histogram(bins=500) + xlab('Value')
 
 ```
 
-### The bootstrap
+Now that we have a bunch of uniform random numbers, we can turn those into normally distributed random numbers using the normal quantile function qnorm():
+
+```{r}
+randomUniform = randomUniform %>% mutate(normal=qnorm(samples))
+ggplot(randomUniform,aes(normal)) + geom_histogram(bins=500) + xlab('Value')
+
+```
+
+Now let's generate the cumulative distribution function from these data, overlaid on top of 
+the theoretical normal distribution.
+
+
+```{r}
+normalCDF=data.frame(x=seq(min(randomUniform$normal),
+                           max(randomUniform$normal),.05))
+normalCDF = normalCDF %>% mutate(cdf= pnorm(x))
+
+ggplot(randomUniform,aes(normal)) + stat_ecdf(color='red') + xlab('Value') + 
+  ylab('Cumulative density') +
+  geom_line(data=normalCDF,aes(x=x,y=cdf),size=1,color='black',linetype='dotted')
+
+```
+
+
+### The boostrap: simple example
+
+```{r}
+library(NHANES)
+
+sampSize=8
+set.seed(12345)
+NHANES$isChild <- NHANES$Age<18
+NHANES_adult=subset(NHANES,subset=!isChild & Height!='NA')
+NHANES_sample=sample_n(NHANES_adult,sampSize)
+NHANES_sample=subset(NHANES_sample,select=c(Height)) %>% arrange(Height)
+NHANES_sample$Height
+```
+```{r}
+bootSample = sample_n(NHANES_sample,8,replace = TRUE) %>% arrange(Height)
+bootSample$Height
+unique(bootSample$Height)
+print('Not included in this sample')
+unique(NHANES_sample$Height)[!(unique(NHANES_sample$Height) %in% unique(bootSample$Height))]
+paste('sample mean:',mean(bootSample$Height))
+```
+
+Now let's do it many times and then use the means estimated from each bootstrap sample to estimate the standard error.
+
+```{r}
+nRuns=1000
+bootMeanHeight = function(df,sampleSize=8){
+  bootSample = sample_n(df,sampleSize,replace = TRUE)
+  return(mean(bootSample$Height))
+}
+bootMeans = replicate(nRuns,bootMeanHeight(NHANES_adult))
+
+ggplot(data.frame(bootMeans=bootMeans),aes(bootMeans)) + geom_histogram(binwidth=1)
+
+print(paste('bootstrap standard error estimate:',sd(bootMeans)))
+print(paste('standard error computed from population:',
+            sd(NHANES_adult$Height)/sqrt(sampSize)))
+
+```
+
+Now get the bootstrap confidence intervals.
+
+```{r}
+bootCI=quantile(bootMeans,c(0.025,0.975))
+print("boostrap confidence limits")
+bootCI
+
+#now let's compute the confidence intervals using the population mean and SD
+popMean=mean(NHANES_adult$Height)
+popSD=sd(NHANES_adult$Height)
+
+popCI = c("2.5%" = popMean - 1.96*(popSD/sqrt(sampSize)),
+          "97.5%"=popMean + 1.96*(popSD/sqrt(sampSize))) 
+
+print("confidence limits based on population")
+
+popCI
+```
+
+### Replicate
+
+The replicate() function is very useful for simulations, since it can do the same thing repeatedly.
+
+```{r}
+output = replicate(6,rnorm(1))
+length(output)
+output
+```
+
+### The bootstrap: NHANES
 
 Let's say that we want to generate confidence intervals for a statistic that we are computing on our data, but we might not know how to compute them directly.  We can use resampling to do this, via a method known as the "bootstrap", invented by Brad Efron of the Stanford Statistics Department.
 
-The idea behind the bootstrap is that we resample observations from our sample in order to estimate the variability of the statistic that we are computing. Let's say that we want to compute confidence intervals for the trimmed mean.  Our data are height measurements from 200 people sampled from the NHANES dataset.
+The idea behind the bootstrap is that we resample observations from our sample in order to estimate the variability of the statistic that we are computing. Let's say that we want to compute confidence intervals for the trimmed mean (which we will learn about later - it's basically the mean computed after removing a particular fraction of the most extreme .  Our data are height measurements from 200 people sampled from the NHANES dataset.
 
 ```{r}
 library(NHANES)
@@ -104,7 +292,9 @@ row.names(meanResults)=c('Mean (normal)','Mean (boostrap)','Trimmed mean (bootst
 print(meanResults)
 ```
 
-### Permutation testing
+### Permutation testing 
+
+NOTE: This material will be featured in a later lecture when we talk about statistical inference.
 
 Now let's say that we want to determine whether there is really a difference in height between males and females, using our sample from the NHANES data.  First, let's use the same code we used in the last session, to see how the confidence intervals compare to one another.
 
