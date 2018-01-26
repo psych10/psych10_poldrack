@@ -1,0 +1,70 @@
+---
+title: "More on data frames"
+output:
+  html_document:
+    df_print: paged
+---
+
+One of the challenging aspects of coding in R is understanding data frames. This notebook provides a bit more detail and practice for working with them.
+
+You can think of a data frame as a package that contains a number of diferent variables that are aligned with each other in rows.  For example, let's say that we wanted to create a variable to store height and free throw percentage for a set of basketball players.  First, let's create several vectors that contain the player's name, height, and free throw percentage.
+
+Data obtained from https://www.teamrankings.com/nba/player-stat/free-throw-percentage
+
+
+```{r}
+
+name=c('Courtney Lee','Kevin Durant','Jamal Murray')
+height=c(77,81,76)
+freeThrowPercentage=c(94.4,88.9,92.4)
+
+```
+
+Now let's put these into a data frame.
+
+```{r}
+freeThrowDf = data.frame(name=name,
+                         height=height,
+                         freeThrowPercentage=freeThrowPercentage)
+freeThrowDf
+```
+
+If we want to turn one of these variables back into a vector, we need to use the $ operation.
+
+```{r}
+freeThrowDf$freeThrowPercentage
+```
+
+Note that if we try to apply a function to the entire data frame, it won't work:
+
+```{r}
+mean(freeThrowDf)
+```
+
+But we can apply it to the individual variable:
+
+```{r}
+mean(freeThrowDf$freeThrowPercentage)
+```
+
+We can also access the data frame using indices that treat it like a two-dimensional vector (which we usually call a matrix).  We access this by specifying the row and column that we want, within square brackets.  The first number is the row, the second is the column.
+
+```{r}
+# first row, second column
+freeThrowDf[1,2]
+
+# second row, first column
+freeThrowDf[2,1]
+```
+
+If you want all of the values, you can leave the index empty and it will give you all of them:
+
+```{r}
+# all rows, first column
+freeThrowDf[,1]
+
+# all columns, first row
+freeThrowDf[1,]
+```
+
+
