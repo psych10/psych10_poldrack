@@ -12,6 +12,7 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(NHANES)
+library(assertthat)
 sampSize=100
 
 NHANES$isChild <- NHANES$Age<18
@@ -21,6 +22,7 @@ NHANES_outlier[1,1]=NHANES_outlier[1,1]*2.54
 
 ggplot(NHANES_outlier,aes(Height)) +
   geom_histogram(bins=30)
+
 
 ```
 
@@ -88,7 +90,7 @@ ggplot(sampleData,aes(mean,meanOutlier,color='mean')) +
   geom_abline(slope=1,intercept=0) +
   xlim(165,175) +
   ylim(165,175) + 
-  geom_point(aes(median,medianOutlier,color='median'),alpha=0.5) +
+  #geom_point(aes(median,medianOutlier,color='median'),alpha=0.5) +
   geom_point(aes(trimmedMean,trimmedMeanOutlier,color='trimmedMean'),alpha=0.5) +
   xlab('Original data') + ylab('With outlier')
 
@@ -151,5 +153,49 @@ ggplot(sampleData,aes(huberMAD,huberMADOutlier,color='Huber M-estimator MAD')) +
   geom_abline(slope=1,intercept=0) +
   xlab('Original data') + ylab('With outlier')
 
+```
+
+### Assertion
+
+```{r}
+maxHumanHeightCm=272
+minHumanHeightCm=55
+assert_that(all(NHANES_outlier$Height>minHumanHeightCm))
+assert_that(all(NHANES_outlier$Height<maxHumanHeightCm))
+```
+
+# review: normal vs. long-tailed distributions
+
+```{r}
+
+fbdata=read.table('https://rawgit.com/psych10/psych10/master/notebooks/Session04-SummarizingData/facebook_combined.txt')
+print(sprintf('found %d unique IDs',length(unique(fbdata[,1]))))
+# use the table function to compute how many times each individual ID shows up in the dataset
+friends_table=table(fbdata[,1])
+nfriends=as.data.frame(friends_table)
+names(nfriends)=c('ID','Nfriends')
+
+ggplot(nfriends, aes(Nfriends)) +
+  geom_histogram(aes(y=..density..),fill = "red",binwidth=2)  +
+  xlab('Number of friends') 
+```
+
+Plot log-log
+
+```{r}
+nfriends = nfriends %>% mutate(logNfriends = log10(Nfriends))
+
+h=hist(nfriends$Nfriends,breaks=seq(min(nfriends$Nfriends)-0.5,max(nfriends$Nfriends)+0.5))
+histDf=data.frame(nfriends=log10(h$mids),number=log10(h$counts/sum(h$counts)))
+#histDf= histDf %>% subset(number>-1)
+
+ggplot(histDf, aes(x=nfriends,y=number)) +
+  geom_point()  +
+  xlab('log(Number of friends)')  + 
+  geom_smooth(method='lm') +
+  ylab('log(frequency)')
+```
+
+```{r}
 ```
 
