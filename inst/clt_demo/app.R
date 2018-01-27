@@ -65,10 +65,10 @@ server <- function(input, output) {
     dist <- input$distribution
     
     df <- tibble(val = c(as.matrix(data()[,dist]))) 
-    
+    bins=nclass.FD(df$val)
     curr_plot <- df %>% 
       ggplot(mapping = aes(x = val)) +
-      geom_histogram(mapping = aes(y = ..density..), binwidth = 1) +
+      geom_histogram(mapping = aes(y = ..density..), bins = bins) +
       theme_bw() +
       labs(x = "", y = "Density", title = "Original Population Distribution") +
       coord_cartesian(xlim = c(mean(df$val) - 3*sd(df$val), 
@@ -98,10 +98,12 @@ server <- function(input, output) {
         .$val %>% 
         mean()
     }
+    bins=nclass.FD(samp_means)
+    print(bins)
     
     samp_plot <- tibble(val = samp_means) %>% 
       ggplot(mapping = aes(x = val)) +
-      geom_histogram(aes(y = ..density..)) +
+      geom_histogram(aes(y = ..density..),bins=bins) +
       theme_bw() +
       labs(x = "Distribution of Sample Means", 
            y = "Density", title = "Sampling Distribution") +
