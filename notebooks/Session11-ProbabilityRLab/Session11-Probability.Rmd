@@ -19,19 +19,21 @@ library(tidyr)
 
 Let's start by asking the question that the Chevalier de Mere asked Blaise Pascal:  Which is more likely - rolling at least one six in four throws of a single die, or rolling at least one double-six in 24 throws of a pair of dice?
 
-Let's start by simulating it.  We will first create function that will generate throws of either one or two dice. 
+Let's start by simulating it.  We will first create functions that will generate throws of either one or two dice. 
 
 ```{r}
 # simulate one die
+
+throwOne = function(nThrowsPerTrial=4){
+        throw=sample.int(6,nThrowsPerTrial,replace=TRUE)
+        return(tabulate(throw,nbins=6))
+}
+
 simChevalierOne = function(nTrials=10000){
     nThrowsPerTrial=4
     critItem=6 # single six
 
-    throwData=matrix(NA,nTrials,6)
-    for (i in 1:nTrials){
-        throw=sample.int(6,nThrowsPerTrial,replace=TRUE)
-        throwData[i,]=tabulate(throw,nbins=6)
-     }
+    throwData=t(replicate(nTrials,throwOne()))
     
     propOutcome=data.frame(throwData) %>% 
         gather() %>% 
@@ -40,17 +42,19 @@ simChevalierOne = function(nTrials=10000){
   return(propOutcome$mean)
 }
 
+throwTwo = function(nThrowsPerTrial=24) {
+    throw=sample.int(6,nThrowsPerTrial,replace=TRUE)*sample.int(6,nThrowsPerTrial,replace=TRUE)
+    return(tabulate(throw,nbins=36))
+
+}
+
 # simulate two dice
 simChevalierTwo = function(nTrials=10000){
     nThrowsPerTrial=24
     critItem=36 # double six
     
-    throwData=matrix(NA,nTrials,36)
-    for (i in 1:nTrials){
-      throw=sample.int(6,nThrowsPerTrial,replace=TRUE)*sample.int(6,nThrowsPerTrial,replace=TRUE)
-        throwData[i,]=tabulate(throw,nbins=36)
-    }
-    
+    throwData=t(replicate(nTrials,throwTwo()))
+
       propOutcome=data.frame(throwData) %>% 
         gather() %>% 
         subset(key==sprintf('X%d',critItem)) %>% 
@@ -107,11 +111,11 @@ So the conditional probility of living in a small house, given that one has a lo
 \[P(small\, house|low\, income) = \frac{P(small\, house\ \cap low\, income)}{P(low\, income)}
 \]
 
-We can compute this as follows:
+We can compute this as follows.  In order to get the joint probability of both having a small house and a low income, we can multiply together two boolean vectors for each of those conditions; the only values that will remain as TRUE (i.e. 1) are those that were true for both of the individual tests, since FALSE=0 and multiplying anything by zero turns it to zero.
 
 ```{r}
-NHANES_lowincome = subset(NHANES,HHIncomeMid<20000)
-pSmallHouseGivenLowIncome = mean(NHANES_lowincome$HomeRooms<4)
+pSmallHouseAndLowIncome=mean((NHANES$HomeRooms<4) * (NHANES$HHIncomeMid<20000),na.rm=TRUE)
+pSmallHouseGivenLowIncome = pSmallHouseAndLowIncome/pLowIncome
 pSmallHouseGivenLowIncome
 ```
 
@@ -309,4 +313,6 @@ randomSamples=rnorm(10,mean=100,sd=10)
 randomSamples
 
 ```
+
+
 
