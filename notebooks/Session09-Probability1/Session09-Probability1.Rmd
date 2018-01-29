@@ -25,23 +25,29 @@ intersect(setA,setB)
 
 #### Probability distributions
 
-Plot probability of N heads out of 10 flips
+# Steph Curry example
 
 ```{r}
-pNheads=dbinom(seq(0,10),10,0.5)
-ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
-  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
-  xlab('Number of heads out of 10 flips') + ylab('Probability') 
+pFreeThrows=dbinom(seq(0,4),4,0.91)
+curryDf = data.frame(numSuccesses=seq(0,4),probability=pFreeThrows)
+curryDf
+sum(curryDf$probability[1:3])
+```
+Plot probability distribution
+
+```{r}
+ggplot(curryDf,aes(x=numSuccesses,y=probability)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,4)) +
+  xlab('Number of successes out of 10 free throws') + ylab('Probability') 
 ```
 
-Color in tail probability for 7+ heads
 
 ```{r}
-pNheads=dbinom(seq(0,10),10,0.5)
-ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
-  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
-  xlab('Number of heads out of 10 flips') + ylab('Probability') +
-  geom_bar(data=data.frame(n=seq(7,10),pNheads=pNheads[8:11]),aes(x=n,y=pNheads),stat="identity",fill='green') 
+
+ggplot(curryDf,aes(x=numSuccesses,y=probability)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,4)) +
+  xlab('Number of successes out of 10 free throws') + ylab('Probability') +
+  geom_bar(data=curryDf[1:3,],aes(x=numSuccesses,y=probability),stat="identity",fill='green') 
 
 
 ```
@@ -50,32 +56,16 @@ ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
 Color in tail probability for 7+ heads - using cumulative
 
 ```{r}
-pNheads=pbinom(seq(0,10),10,0.5)
-ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
-  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
-  xlab('Number of heads out of 10 flips') + ylab('Cumulative probability') +
-  geom_hline(yintercept=pNheads[7],color='blue',linetype='dashed') + 
-  geom_bar(data=data.frame(n=seq(7,10),pNheads=pNheads[8:11]),aes(x=n,y=pNheads),stat="identity",fill='green') 
 
+curryDf$cumulative=cumsum(curryDf$probability)
+ggplot(curryDf,aes(x=numSuccesses,y=cumulative)) +
+  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,4)) +
+  xlab('Number of successes out of 10 free throws') + ylab('Cumulative Probability') +
+  geom_bar(data=curryDf[1:3,],aes(x=numSuccesses,y=cumulative),stat="identity",fill='green') +
+  geom_hline(yintercept=curryDf$probability[3],color='blue',linetype='dashed') 
 
-pOver7 = 1 - pbinom(6,10,0.5)
-print(paste('Probability of 7 or more heads out of 10:',pOver7))
 ```
 
-Color in tail probability for 3 or fewer heads - lower tail
-
-```{r}
-pNheads=pbinom(seq(0,10),10,0.5)
-ggplot(data.frame(n=seq(0,10),pNheads=pNheads),aes(x=n,y=pNheads)) +
-  geom_bar(stat="identity") + scale_x_continuous(breaks=seq(0,10)) +
-  xlab('Number of heads out of 10 flips') + ylab('Cumulative probability') +
-  geom_hline(yintercept=pNheads[4],color='blue',linetype='dashed') + 
-  geom_bar(data=data.frame(n=seq(0,3),pNheads=pNheads[1:4]),aes(x=n,y=pNheads),stat="identity",fill='green') 
-
-
-p3orLess = pbinom(3,10,0.5)
-print(paste('Probability of 3 or fewer heads out of 10:',p3orLess))
-```
 
 
 #### Election results
