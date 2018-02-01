@@ -1582,8 +1582,8 @@ $(document).ready(function () {
 <h3>Independence</h3>
 <p>Are physical activity and mental health related? Let’s use NHANES to test this question.</p>
 <pre class="r"><code>library(NHANES)
-NHANES$isChild &lt;- NHANES$Age&lt;18
-NHANES_adult=subset(NHANES,subset=!isChild &amp; PhysActive!='NA' &amp; DaysMentHlthBad!='NA')
+
+NHANES_adult=subset(NHANES,subset=NHANES$Age&gt;=18 &amp; !is.na(PhysActive) &amp; !is.na(DaysMentHlthBad))
 NHANES_adult = NHANES_adult %&gt;% mutate(badMentalHealth=DaysMentHlthBad&gt;7)
 NHANES_adult %&gt;% summarize(badMentalHealth=mean(badMentalHealth))</code></pre>
 <div data-pagedtable="false">

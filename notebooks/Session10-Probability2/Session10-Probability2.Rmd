@@ -18,8 +18,8 @@ Are physical activity and mental health related?  Let's use NHANES to test this 
 
 ```{r}
 library(NHANES)
-NHANES$isChild <- NHANES$Age<18
-NHANES_adult=subset(NHANES,subset=!isChild & PhysActive!='NA' & DaysMentHlthBad!='NA')
+
+NHANES_adult=subset(NHANES,subset=NHANES$Age>=18 & !is.na(PhysActive) & !is.na(DaysMentHlthBad))
 NHANES_adult = NHANES_adult %>% mutate(badMentalHealth=DaysMentHlthBad>7)
 NHANES_adult %>% summarize(badMentalHealth=mean(badMentalHealth))
 NHANES_adult %>% group_by(PhysActive) %>% summarize(badMentalHealth=mean(badMentalHealth))
