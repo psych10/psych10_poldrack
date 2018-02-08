@@ -1,0 +1,110 @@
+---
+title: 'Session 14: Simulation and resampling'
+output:
+  html_document:
+    df_print: paged
+---
+
+I this session we will explore Monte Carlo simulation and resampling.  We will start with the class thinking of ideas for a process to simulate, and then Dr. Poldrack will code the simulation in real time.
+
+First let's load the necessary libraries.
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(NHANES)
+library(cowplot)
+```
+
+
+Failing that, this is a fallback example.
+
+#### Reinforcement learning 
+
+Let's say that we want to simulate how a person learns from experience.  They start without much knowledge, and then on the basis of the outcomes of their experience they are able to behave in a way that gives them more reward.
+
+We are going to simulate a problem called a "two-armed bandit", where there are two slots machines that you can play and you have to choose which to play.  We will implement a very simple model of this problem.
+
+```{r}
+# softmax function - from https://gist.github.com/aufrank/83572
+
+## from http://tr.im/hH5A
+logsumexp <- function (x) {
+  y = max(x)
+  y + log(sum(exp(x - y)))
+}
+softmax <- function (x) {
+  exp(x - logsumexp(x))
+}
+
+# we initially set our estimate of the probility of reward on both bandits to 0.5
+nTrials=100
+learningRate=0.0
+df=data.frame(vA=array(NA,dim=nTrials+1)) %>% 
+  mutate(vB=NA,choice=NA,reward=NA)
+
+
+pActualReward=c(0.75,0.25)
+# start with equal value of both
+df$vA[1]=0.01
+df$vB[1]=0.01
+
+for (i in 1:nTrials){
+  # choose a bandit based on the probabilities
+  # first, use the softmax function to squash the value estimates into probabilities
+  pResponse=softmax(c(df$vA[i],df$vB[i]))
+  
+  # since there are only two responses, we can just select a random uniform number and
+  # see whether it is below the first probability.
+  if (runif(1)<pResponse[1]){
+    df$choice[i]=1
+  } else {df$choice[i]=2}
+  
+  # based on the choice, see whether there is a reward
+  df$reward[i]=as.integer(runif(1)<pActualReward[df$choice[i]])
+
+  # now we update our value estimate for the chosen response
+  
+  if (df$choice[i]==1){
+    df$vA[i+1]=df$vA[i]+df$reward[i]*learningRate
+    df$vB[i+1]=df$vB[i]
+  } else {
+     df$vB[i+1]=df$vB[i]+df$reward[i]*learningRate
+     df$vA[i+1]=df$vA[i]
+ }
+}
+
+# toss the extra row at the end
+df=df[1:nTrials,]
+
+```
+
+Now let's summarize the data
+
+```{r}
+df$blockNumber=kronecker(seq(1,10),rep(1,10))
+
+# let's group the data into blocks of 10 trials and plot the probability of choosing each bandit
+
+
+blockSummary=df %>% 
+  group_by(blockNumber,choice) %>% 
+  summarize(rate=n()/10) %>% filter(choice==1)
+
+rewardSummary = df %>% group_by(blockNumber) %>% summarize(meanReward=mean(reward))
+
+p1 = ggplot(blockSummary,aes(x=blockNumber,y=rate))+
+  geom_line() + 
+  geom_hline(yintercept = 0.5,linetype='dotted') + 
+  ylim(0.,1) +
+  ylab('Proportion of choices of bandit A')
+p2 = ggplot(rewardSummary,aes(x=blockNumber,y=meanReward))+
+  geom_line() + 
+  ylim(0.,1) +
+  ylab('Proportion of choices of bandit A')
+
+print(p1)
+print(p2)
+
+```
+
