@@ -146,10 +146,12 @@ We can compute the likelihood of the observed result under the null hypothesis, 
 We will just keep it easy and compute the t statistic using the built in t.test() function.
 
 ```{r}
-ttestResult = t.test(NHANES_sample$BMI[NHANES_sample$PhysActive=='No'],NHANES_sample$BMI[NHANES_sample$PhysActive=='Yes'],var.equal=TRUE,alternative='greater')
+
+ttestResult = t.test(BMI~PhysActive,data=NHANES_sample,var.equal=TRUE,alternative='greater')
 print(ttestResult)
 lowerpt=pt(ttestResult$statistic,sampSize-2)
 print(paste('lower tail probability (t distribution):',lowerpt[1]))
+
 
 ```
 
@@ -175,7 +177,7 @@ print(paste('upper tail probability (permutation distribution):',upperpPerm[1]))
 What happens if we rerun the test as a two-tailed (non-directional) test?
 
 ```{r}
-ttestResult = t.test(NHANES_sample$BMI[NHANES_sample$PhysActive=='No'],NHANES_sample$BMI[NHANES_sample$PhysActive=='Yes'],var.equal=TRUE)
+ttestResult = t.test(BMI~PhysActive,data=NHANES_sample,var.equal=TRUE,alternative='two.sided')
 print(ttestResult)
 
 ```
@@ -361,3 +363,100 @@ ggplot(df,aes(priorVal,fdr,color=power)) +
 
 
 ```
+
+### Schizophrenia example
+
+
+```{r}
+oddsRatioChr6=1.167
+pSZ=7.2/1000
+pGene=1 - 0.763
+
+# we just assume here that the unexposed rates are the population prevalence
+
+oddsNoGene=pSZ/(1-pSZ)
+1/oddsNoGene
+oddsGene = oddsRatioChr6*oddsNoGene
+1/oddsGene
+
+# this one is for rs171748
+oddsRatioChr6=1.08 
+pSZ=7.2/1000
+pGene=1 -  0.471
+
+# we just assume here that the unexposed rates are the population prevalence
+
+oddsNoGene=pSZ/(1-pSZ)
+1/oddsNoGene
+oddsGene = oddsRatioChr6*oddsNoGene
+1/oddsGene
+
+```
+
+### simulating multiple testing
+
+Here we simulate the effects of running a large number of statistical tests.  Let's say we are going to run a million statistical tests, but that the results are actually normally distributed with a mean of zero.  That is, there is no effect to be found. How often would we actually find an effect?
+
+```{r}
+nTests=10000
+uncAlpha=0.05
+uncOutcome=replicate(nTests,sum(rnorm(nTests)<(qnorm(uncAlpha))))
+
+print(paste('uncorrected:',mean(uncOutcome>0)))
+
+corAlpha=0.05/nTests
+
+corOutcome=replicate(nTests,sum(rnorm(nTests)<(qnorm(corAlpha))))
+print(paste('corrected:',mean(corOutcome>0)))
+
+```
+
+### Randomization example
+
+```{r}
+
+roundToNearest5 <- function(x,base=5){ 
+        return(base*round(x/base))
+} 
+
+set.seed(123456)
+df=data.frame(group=as.factor(c(rep('FB',5),rep('XC',5))),
+              squat=roundToNearest5(c(rnorm(5)*30 + 300,rnorm(5)*30 + 140)))
+
+
+df = df %>% mutate(scrambledGroup=sample(group))
+df = df %>% mutate(scrambledGroup2=sample(group))
+df
+
+tt=t.test(squat~group,data=df,var.equal=TRUE)
+tt
+
+tt_scram=t.test(squat~scrambledGroup,data=df,var.equal=TRUE)
+tt_scram
+
+tt_scram2=t.test(squat~scrambledGroup2,data=df,var.equal=TRUE)
+tt_scram2
+
+```
+
+Now randomize order 10000 times to get histogram
+
+```{r}
+
+getScrambledTtest = function(dfScram){
+  dfScram$group = sample(dfScram$group)
+  tt=t.test(squat~group,data=dfScram,var.equal=TRUE)
+  return(tt$statistic)
+}
+
+ttestScrambledResults = replicate(10000,getScrambledTtest(df))
+
+ggplot(data.frame(ttest=ttestScrambledResults),aes(ttest)) + 
+  geom_histogram(bins=100) +
+  geom_vline(xintercept = tt$statistic,color='blue')
+
+mean(ttestScrambledResults)
+max(ttestScrambledResults)
+mean(ttestScrambledResults>=tt$statistic)
+```
+
