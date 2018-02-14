@@ -1,0 +1,81 @@
+---
+title: "Session 22: Categorical relationships"
+output: html_notebook
+---
+
+Let's use the data from the Stanford Open Policing Project (https://openpolicing.stanford.edu/data/) to ask whether black individuals are more likely to be searched after being pulled over by the police, compared to white individuals. We will use the data from the State of Connecticut since they are fairly small.  These data were first cleaned up to remove all unnecessary data (see process_CT_data.py).
+
+First let's load the necessary libraries and also load the data and clean them up.
+```{r}
+library(tidyverse)
+
+stopData=read.table('CT_data_cleaned.csv',header=TRUE,sep=',') %>%
+  mutate(searched=recode(search_conducted,'False'=FALSE,'True'=TRUE)) %>%
+  select(-search_conducted)
+
+```
+
+```{r}
+summaryDfRace = stopData %>% group_by(driver_race) %>% summarize(n=n(),prop=n()/nrow(stopData))
+summaryDfRace
+summaryDfStop = stopData %>% group_by(searched) %>% summarize(n=n(),prop=n()/nrow(stopData))
+summaryDfStop
+summaryDf2way=stopData %>% group_by(searched,driver_race) %>% summarize(n=n(),prop=n()/nrow(stopData))
+summaryDf2way
+
+expected=outer(summaryDfRace$prop, summaryDfStop$prop)
+expected
+
+```
+
+
+```{r}
+
+```
+
+Let's perform permutation to assess the distribution of proportions under the null hypothesis of no relations.  This is a fairly large dataset so this analysis could take a couple of minutes to complete.
+
+```{r}
+nSamples=1000
+
+stopDataShuffled=stopData
+propDiffSim=array(NA,nSamples)
+for (i in 1:nSamples){
+  stopDataShuffled$driver_race=sample(stopDataShuffled$driver_race)
+  t=table(stopDataShuffled$driver_race,stopDataShuffled$search_conducted)
+  tNorm=t/apply(t,1,sum)
+  propDiffSim[i]=tNorm[1,2]-tNorm[2,2]
+}
+
+```
+
+Let's compare the histogram of differences under the null hypothesis to the observed difference of 0.0197.
+
+```{r}
+ggplot(data.frame(probDiffSim=propDiffSim),aes(probDiffSim)) +
+  geom_histogram(bins=100) +
+  geom_vline(xintercept = summaryTableNormalized[1,2]-summaryTableNormalized[2,2],color='blue') +
+  xlab('Difference in proportion of searches')
+```
+
+### Chi-squared test
+
+
+We want to test whether the proportion of searches differs between White and Black individuals. We can use the built-in R tool for comparing two proportions which uses a Chi-squared test.
+
+```{r}
+pTest=prop.test(table(stopData$driver_race,stopData$search_conducted), correct=FALSE) 
+print(pTest)
+```
+
+Let's plot the Chi-squared distribution with one degree of freedom, which is the theoretical distribution we will use for this analysis.
+
+```{r}
+xvals=seq(1,10,0.05)
+csvals=dchisq(xvals,1)
+
+ggplot(data.frame(xvals=xvals,csvals=csvals),aes(xvals,csvals)) +
+  geom_line() + xlab('Value') + ylab('Chi-squared density')
+  #geom_vline(xintercept = pTest$statistic,color='blue')
+```
+
