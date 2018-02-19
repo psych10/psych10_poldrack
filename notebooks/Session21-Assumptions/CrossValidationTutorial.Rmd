@@ -1,0 +1,335 @@
+---
+title: "Cross validation tutorial"
+output:
+  html_document:
+    df_print: paged
+---
+
+One of our goals in statistics and machine learning is to able to make predictions about new data given some existing dataset.  We have already seen (in Session 5) how a more complex model will always fit our specific dataset better, but will often cause the model to do a worse job making predictions about new datasets.  In this tutorial you will see how we can use a concept from machine learning called "cross-validation" to determine how well our model would fit on new data, even when we only have one dataset.
+
+Let's say that we want to predict height from age in the NHANES dataset for children between the ages 5 and 18.  First let's set up our dataset. We will sample 100 children from the full dataset for this analysis. We will create a model that includes Age and Gender.
+
+```{r}
+library(NHANES)
+library(dplyr)
+library(ggplot2)
+
+
+set.seed(123456789)
+sampleSize=50
+NHANES_sample = NHANES %>%
+  unique() %>% 
+  filter(Age>4 & Age<19 & !is.na(Height) & !is.na(Gender)) %>%
+  select(Age,Height,Gender) %>%
+  sample_n(sampleSize)
+  
+ggplot(NHANES_sample,aes(Age,Height)) + 
+  geom_point() + 
+  geom_smooth(method='lm',se=FALSE)
+```
+
+We can fit a model to the full dataset, using the lm() function. Let's start with a simple linear model:
+
+```{r}
+lmResultLinear = lm(Height ~ Age + Gender,data=NHANES_sample)
+summary(lmResultLinear)
+```
+
+The important thing we see here is that there is a strong effect of Age on Height.  One way that we can quantify how well the model fits is by using the Pearson's correlation coefficient (which you learned about in Session 18) to see how similar the actual data are to the model's predicted values (which are saved in the fitted.values variable).  This is computed using the cor() function.  We can also compute the root mean squared error comparing predicted and actual values.
+
+```{r}
+
+RMSElinear = sqrt(mean((NHANES_sample$Height -lmResultLinear$fitted.values)**2))
+RMSElinear
+```
+
+What happens now if we take a many new samples from NHANES and try to predict Height of those individuals using the same model?
+
+```{r}
+sampleFit = function(){
+  NHANES_sample2 =NHANES %>%
+    unique() %>% 
+    filter(Age>4 & Age<19 & !is.na(Height) & !is.na(Gender)) %>%
+    select(Age,Height,Gender) %>%
+    sample_n(sampleSize)
+  rmse=sqrt(mean((NHANES_sample2$Height -predict(lmResultLinear,newdata=NHANES_sample2))**2))
+}
+
+RMSElinearNew = replicate(100,sampleFit())
+mean(RMSElinearNew)
+```
+
+Here we see that the model still predicts height well, but slightly less well than it did for the data that the model was fitted to.
+
+We would like to be able to determine how well the model will fit with new data (which we also refer to as "generalization"), so that we can know how much faith to have in our predictions, even if we don't have a whole new dataset to test it on, like we had above.  We can use the concept of cross-validation to do this.
+
+In cross-validation, we split our dataset into two parts that we call a "training set" (which is used to fit or "train" the model) and a "testing set" (which is used to to test or validate the model). We do this repeatedly so that each data point will end up in one testing set.  A simple version of this is called "leave one out" cross-validation, which works like it sounds: We march through all of the observations,in each case leaving out one observation and then using the model fitted with the remaining data to predict the outcome for the left-out ("test") observation.  Let's see how that would work for our sample.
+
+```{r}
+# add an index that we can use to loop over
+NHANES_sample = NHANES_sample %>% 
+  mutate(ID = seq(1:sampleSize),
+         predictedLOO=NA)
+
+# create a function that runs the model on the training data and returns the predicted value
+cvPredict = function(testDf,dataDf){
+  trainDf = dataDf %>% filter(ID != testDf$ID)
+  model = lm(Height ~ Age + Gender ,data=trainDf)
+  testDf$predictedLOO = predict(model,newdata=testDf)
+  return(testDf)
+}
+
+cvPredictions = NHANES_sample %>% 
+  group_by(ID) %>%
+  do(cvPredict(.,NHANES_sample))
+
+RMSEloo = sqrt(mean((cvPredictions$Height-cvPredictions$predictedLOO)**2))
+RMSEloo
+```
+
+
+This shows that our model does a good job of predicting height from age and gender, even on individuals who were not included in the fitting of the model. In fact, it only does a tiny bit worse than it did on the original data. 
+
+### Model selection using cross validation
+
+One of the ways that we can use cross validation is to determine the right model.  Remember from before that a more complex model will always fit the data better, because it can adapt to the specific data points. This will improve the fit to the specific dataset, but will actually make the model *worse* at generalization, because it will be *overfitted* to the original dataset.  Cross-validation provides a way to prevent this.
+
+Let's say that we have a dataset and we don't know what the right model is; it could be linear, quadratic, or cubic.  Let's generate some data with each of these patterns.
+
+```{r}
+# show linear, quadratic, and cubic fits to a dataset
+nPoints=20
+noiseSD=3
+cubicPts= sin(seq(0,2*pi,length.out=nPoints))
+dataDf = data.frame(x=runif(nPoints)*20) %>% 
+  mutate(x=x-mean(x)) %>%
+  arrange(x) %>%
+  mutate(linear = x*0.5 + rnorm(nPoints)*noiseSD) %>%
+  mutate(quadratic = (x**2)*-0.5 + rnorm(nPoints)*noiseSD) %>%
+  mutate(cubic = cubicPts  + rnorm(nPoints)*0.1) 
+
+library(cowplot)
+
+p1=ggplot(dataDf,aes(x,linear)) + geom_point()
+p2=ggplot(dataDf,aes(x,quadratic)) + geom_point()
+p3=ggplot(dataDf,aes(x,cubic)) + geom_point()
+plot_grid(p1,p2,p3)
+```
+
+Now let's fit all three models to each dataset. We can do this using the poly() function in R, which will generate a polynomial of a given order.  The models look like this:
+
+Linear (model order 1):
+
+\[
+y = x*\beta_1 + intercept
+\]
+]
+
+Quadratic (model order 2):
+
+\[
+y = x*\beta_1 + x^2*\beta_2 + intercept
+\]
+]
+
+Cubic (model order 3):
+
+\[
+y = x*\beta_1 + x^2*\beta_2 + x^3*\beta_3  + intercept
+\]
+]
+
+Let's fit them all using lm() - see https://www.r-bloggers.com/fitting-polynomial-regression-in-r/ for more on this:
+
+```{r}
+
+fitModel = function(modelDf,dataDf){
+  modelFit = lm(sprintf('%s ~ poly(x,%d)',modelDf$data,modelDf$modelOrder),data=dataDf)
+  modelDf$MSE = mean(modelFit$residuals**2)
+  return(modelDf)
+}
+
+modelDf = expand.grid(data=c('linear','quadratic','cubic'),modelOrder=seq(1,3))
+modelDf = modelDf %>% group_by(data,modelOrder) %>% do(fitModel(.,dataDf))
+modelDf
+
+p1=ggplot(modelDf %>% filter(data=='linear'),aes(modelOrder,MSE)) + 
+  geom_line() + 
+  ggtitle('Linear data')
+p2=ggplot(modelDf %>% filter(data=='quadratic'),aes(modelOrder,MSE)) + 
+  geom_line() +
+  ggtitle('Quadratic data')
+p3=ggplot(modelDf %>% filter(data=='cubic'),aes(modelOrder,MSE)) + 
+  geom_line() +
+  ggtitle('Cubic data')
+
+plot_grid(p1,p2,p3)
+
+```
+
+As we saw in Lecture 5, the error is always lower for the more complex model, regardless of whether it's actually the right model or not. Let's look at the linear data to see what is going on:
+
+```{r}
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) 
+
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') 
+
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') 
+
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') + 
+  geom_smooth(method=lm,formula='y ~ poly(x,8)',se=FALSE,color='orange') 
+
+
+ggplot(dataDf,aes(x,quadratic)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') 
+
+ggplot(dataDf,aes(x,cubic)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') 
+
+```
+
+We see that the higher order models are fitting the noise rather than the signal in the dataset for the datasets where there is no nonlinear signal present.  Conversely, the linear model *underfits* on the data with the quadratic and cubic signal.
+
+How can we decide which model is actually the right one?  Cross-validation gives us a way to do this.  Instead of deciding based on how well the model fits to the data that it was created with, we instead fit the model to part of the data but then test it on a different part. To keep things simple we will use our leave-one-out procedure that we discussed above; this is usually not the best way to perform crossvalidation, but it's perfectly legitimate.
+
+First let's setup a simple version, and then we will apply it to the data created above.
+
+```{r}
+cvDf = data.frame(x=seq(-4,4,1)) %>% 
+  mutate(y=x*0.5 + rnorm(9)*0.5) 
+cvDf = cvDf %>% 
+  mutate(ID=seq(1,9)) %>%
+  mutate(prediction=NA,slope=NA,intercept=NA)
+
+ggplot(cvDf,aes(x,y)) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+```
+
+To perform cross validation on this dataset, we take each datapoint and fit the model using the remainder of the data points, and then use the model to make a prediction for the left-out data point. 
+
+```{r}
+
+cvDf = cvDf
+for (i in 1:nrow(cvDf)) {
+  # set up training and test data frames
+  trainingDf=cvDf %>% filter(ID != i)
+  testDf = cvDf %>% filter(ID == i)
+   # fit model to training data
+  lmResult = lm(y ~ x, data=trainingDf)
+  cvDf$prediction[i] = predict(lmResult,newdata=testDf)
+  cvDf$intercept[i] = lmResult$coefficients[1]
+  cvDf$slope[i] = lmResult$coefficients[2]
+  
+  
+}
+```
+
+Make figures for lecture
+```{r fig.width=6, fig.height=6}
+for (i in 1:nrow(cvDf)) {
+  ggplot(cvDf,aes(x,y)) + 
+    geom_point() +
+    annotate('point',x=cvDf$x[i],y=cvDf$y[i],color='red',size=3) + 
+    geom_abline(slope=cvDf$slope[i],intercept=cvDf$intercept[i],color='blue') +
+    xlim(-4.5,4.5) + ylim(-4.5,4.5) + 
+    annotate('point',x=cvDf$x[i],y=cvDf$prediction[i],color='green',size=3)
+  ggsave(sprintf('cv_demo/point%d.png',i),width=6,height=6)
+}
+ggplot(cvDf,aes(y,prediction)) + 
+  geom_point(size=3) + 
+  xlim(-2,2) + ylim(-2,2) + 
+  geom_abline(slope=1,intercept=0) + 
+  xlab('observed y') + ylab('predicted y') + 
+  theme(axis.text=element_text(size=12), axis.title=element_text(size=18,face="bold"))
+
+lmResultFullData = lm(y~x, cvDf)
+fullDataRMSE = sqrt(mean(lmResultFullData$residuals**2))
+fullDataRMSE
+
+cvDf = cvDf %>% mutate(predictionResidual = prediction - y)
+predictionRMSE = sqrt(mean(cvDf$predictionResidual**2))
+predictionRMSE
+```
+
+Take 100 samples from the same generating model and look at the fit of the model to the new data.
+
+```{r}
+testNewSample = function(lmResult){
+  cvDfNew = data.frame(x=seq(-4,4,1)) %>% 
+    mutate(y=x*0.5 + rnorm(9)*0.5) 
+pred=predict(lmResult,cvDfNew)
+cvDfNew = cvDfNew %>% mutate(predictionError=pred-y)
+return(sqrt(mean(cvDfNew$predictionError**2)))
+}
+
+newSampleRMSE=replicate(100,testNewSample(lmResultFullData))
+mean(newSampleRMSE)
+```
+
+
+Now we apply it to the data from above.
+
+```{r}
+cvPredict2 = function(testDf,dataDf,modelOrder,datatype){
+
+  trainDf = dataDf %>% filter(ID != testDf$ID)
+  model = lm(sprintf('%s ~ poly(x,%d)',datatype,modelOrder),data=trainDf)
+  testDf$predictedLOO = predict(model,newdata=testDf)
+  return(testDf)
+}
+
+
+fitModelLOO = function(modelDf,dataDf){
+  dataDf=dataDf %>% mutate(ID=seq(1,nrow(dataDf)))
+  cvOutput = dataDf %>% group_by(ID) %>% do(cvPredict2(.,dataDf,modelDf$modelOrder,modelDf$data))
+  modelDf$MSEloo = mean((cvOutput$predictedLOO - cvOutput[,as.character(modelDf[1,]$data)])**2)
+  return(modelDf)
+}
+
+outputLOO = modelDf %>% group_by(data,modelOrder) %>% do(fitModelLOO(.,dataDf))
+```
+
+Let's plot the results to see how it turned out:
+
+```{r}
+minMSE = outputLOO %>% group_by(data) %>% summarize(minMSE=min(MSEloo),bestModelOrder=which(MSEloo==min(MSEloo)))
+p1=ggplot(outputLOO %>% filter(data=='linear'),aes(modelOrder,MSEloo)) + 
+  geom_line() + 
+  ggtitle('Linear data (order=1)') +
+  annotate('point',x=minMSE$bestModelOrder[1],y=minMSE$minMSE[1],color='blue')
+
+p2=ggplot(outputLOO %>% filter(data=='quadratic'),aes(modelOrder,MSEloo)) + 
+  geom_line() +
+  ggtitle('Quadratic data (order=2)') +
+  annotate('point',x=minMSE$bestModelOrder[2],y=minMSE$minMSE[2],color='blue')
+
+p3=ggplot(outputLOO %>% filter(data=='cubic'),aes(modelOrder,MSEloo)) + 
+  geom_line() +
+  ggtitle('Cubic data (order=3)') + 
+  annotate('point',x=minMSE$bestModelOrder[3],y=minMSE$minMSE[3],color='blue')
+
+
+plot_grid(p1,p2,p3)
+
+```
+We see that in each case, the MSE for the held-out data was lowest for the model that was properly matched to the data.

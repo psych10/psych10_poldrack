@@ -1,81 +1,263 @@
 ---
-title: "Session 22: Categorical relationships"
-output: html_notebook
+title: 'Session 22: Categorical relationships'
+output:
+  html_document:
+    df_print: paged
 ---
-
-Let's use the data from the Stanford Open Policing Project (https://openpolicing.stanford.edu/data/) to ask whether black individuals are more likely to be searched after being pulled over by the police, compared to white individuals. We will use the data from the State of Connecticut since they are fairly small.  These data were first cleaned up to remove all unnecessary data (see process_CT_data.py).
 
 First let's load the necessary libraries and also load the data and clean them up.
 ```{r}
 library(tidyverse)
 
-stopData=read.table('CT_data_cleaned.csv',header=TRUE,sep=',') %>%
+```
+
+#### Chi-squared test example
+
+Let's ask a simple question: Are births equally likely on all days of the year? We can use the birth data that was produced by Chris Mulligan (http://chmullig.com/2012/06/births-by-day-of-year/).  This code is adapted from his code at:
+
+
+```{r}
+#load directly from chmullig.com
+bdata <- read.csv("http://chmullig.com/wp-content/uploads/2012/06/births.csv")
+
+#filter
+bdata<-bdata[(bdata$births > 1000),]
+bdata$smoothbirths <- bdata$births
+bdata$smoothbirths[bdata$month==2 & bdata$day==29] <- bdata$births[bdata$month==2 & bdata$day==29]*4
+
+bdata$order <- rank(bdata$month + bdata$day/100)
+
+#special days we might care about
+bdata$flag[bdata$month==2 & bdata$day==14] <- 3
+bdata$flag[bdata$month==10 & bdata$day==31] <- 1
+
+monthstarts <- by(bdata$order, list(bdata$month), min)
+
+ggplot(bdata,aes(order,smoothbirths)) +
+  geom_line() +
+  xlab('Days of the year') +
+  ylab('Number of births')
+
+# plot with mean
+ggplot(bdata,aes(order,smoothbirths)) +
+  geom_line() +
+  xlab('Days of the year') +
+  ylab('Number of births') +
+  geom_hline(yintercept = mean(bdata$smoothbirths),color='blue')
+
+```
+
+Now compute the chi-squared test versus the expected value for all days being equal, which is simply the mean number of births per day.
+
+
+```{r}
+bdata = bdata %>% 
+  mutate(predicted=mean(smoothbirths)) %>%
+  mutate(devianceSquared=(smoothbirths-predicted)**2)
+
+chisqValue=sum(bdata$devianceSquared/bdata$predicted)
+chisqValue
+
+chisq.test(bdata$smoothbirths)
+
+```
+
+#### Contingency table example
+
+```{r}
+library(NHANES)
+NHANES_adult = NHANES %>% select(Diabetes,TVHrsDay) %>% 
+  filter(!is.na(Diabetes) & !is.na(TVHrsDay)) %>%
+  mutate(TVHrsDayNumeric=recode(TVHrsDay,
+                                '0_hrs' = 0,
+                                '0_to_1_hr' = 0.5,
+                                '1_hr' = 1,
+                                '2_hr' = 2,
+                                '3_hr' = 3,
+                                '4_hr' = 4,
+                                'More_4_hr' = 5)) %>%
+  mutate(TVOver3Hrs=TVHrsDayNumeric>3)
+
+summaryTable = NHANES_adult %>%
+  group_by(Diabetes,TVOver3Hrs) %>%
+  summarize(n=n()) %>%
+  spread(Diabetes,n)
+summaryTable
+```
+
+We can run a chi-squared test on this to test for independence.
+
+```{r}
+chisq.test(summaryTable[,2:3],correct=FALSE)
+```
+
+#### 2x2 test
+Let's use the data from the Stanford Open Policing Project (https://openpolicing.stanford.edu/data/) to ask whether black individuals are more likely to be searched after being pulled over by the police, compared to white individuals. We will use the data from the State of Connecticut since they are fairly small.  These data were first cleaned up to remove all unnecessary data (see process_CT_data.py).
+
+First let's load the data and clean them up.
+```{r}
+
+stopData=read.table('https://rawgit.com/psych10/psych10/master/notebooks/Session22-CategoricalRelationships/CT_data_cleaned.csv',header=TRUE,sep=',') %>%
   mutate(searched=recode(search_conducted,'False'=FALSE,'True'=TRUE)) %>%
   select(-search_conducted)
 
 ```
 
+Now let's compute summaries for the marginal probabilities for each factor as well as the joint probabilities in the data.
 ```{r}
-summaryDfRace = stopData %>% group_by(driver_race) %>% summarize(n=n(),prop=n()/nrow(stopData))
+summaryDfRace = stopData %>% 
+  group_by(driver_race) %>% 
+  summarize(n=n(),prop=n()/nrow(stopData))
 summaryDfRace
-summaryDfStop = stopData %>% group_by(searched) %>% summarize(n=n(),prop=n()/nrow(stopData))
+summaryDfStop = stopData %>% 
+  group_by(searched) %>% 
+  summarize(n=n(),prop=n()/nrow(stopData))
 summaryDfStop
-summaryDf2way=stopData %>% group_by(searched,driver_race) %>% summarize(n=n(),prop=n()/nrow(stopData))
+summaryDf2way=stopData %>% 
+  group_by(searched,driver_race) %>% 
+  summarize(n=n()) %>% 
+  arrange(driver_race,searched)
+
+```
+
+Now we want to know the expected probabilities under independence, which are simply the products of each of the marginal probabilities.  We can use a linear algebra trick known as an "outer product" to get this easily.
+```{r}
+expected=outer(summaryDfRace$prop, summaryDfStop$prop)*nrow(stopData)
+
+expectedDf=data.frame(expected,driverRace = c('Black','White'))
+names(expectedDf)=c('NotStopped','Stopped','driverRace')
+expectedDfTidy=gather(expectedDf,searched,n,-driverRace) %>% 
+  arrange(driverRace,searched)
+
+
+summaryDf2way = summaryDf2way %>% 
+  mutate(expected=NA)
+summaryDf2way$expected = expectedDfTidy$n
+summaryDf2way = summaryDf2way %>% 
+  mutate(stdSqDiff = (n - expected)**2/expected)
 summaryDf2way
 
-expected=outer(summaryDfRace$prop, summaryDfStop$prop)
-expected
+chisq=sum(summaryDf2way$stdSqDiff)
+```
+
+#### Chi-squared test
+
+The chi-squared test quantifies the squared deviance between the observed and expected data, standardized by the expected data.  
+
+\[
+\chi^2 = \sum_{i,j}{\frac{(observed_{ij} - expected_{ij})^2}{expected_{ij}}}
+\]
+
+Under the null hypothesis, this statistic is distributed according to a chi-squared distribution.  This is what the chi-squared distribution looks like:
+
+```{r}
+chisqDf=data.frame(seq=seq(0.1,20,0.1)) %>%
+  mutate(chisq=dchisq(seq,1)) 
+chisqDf$chisq=chisqDf$chisq/sum(chisqDf$chisq)
+ggplot(chisqDf,aes(seq,chisq)) +
+  geom_line() + xlab('Chi-squared value') +
+  ylab('probability density')
+
+```
+
+The chi-squared distribution is the distribution of the sum of squares of a standard normal random variate.  We can see that by sampling a bunch of random normal variates and squaring them and looking at their histogram.
+
+```{r}
+d=replicate(10000,rnorm(8)**2)
+dMean=apply(d,2,sum)
+csDf=data.frame(x=seq(0.01,40,0.01)) %>%
+  mutate(chisq=dchisq(x,8))
+ggplot(data.frame(dMean),aes(dMean)) + 
+  geom_histogram(aes(y=..density..),bins=100) +
+  xlim(0,40) + ylim(0,.12)
+ggplot(data.frame(dMean),aes(dMean)) + 
+  geom_histogram(aes(y=..density..),bins=100) +
+  geom_line(data=csDf,aes(x,chisq),color='blue',size=1.5)+
+  xlim(0,40) + ylim(0,.12)
+  
 
 ```
 
 
-```{r}
+We can compute the chi-squared test directly from the contingency table in R using the chisq.test() function:
 
+```{r}
+summaryDf2wayTable = summaryDf2way %>% 
+  select(-expected,-stdSqDiff) %>% 
+  spread(searched,n) 
+  
+summaryDf2wayTable
+
+summaryDf2wayTable = summaryDf2wayTable %>%
+  select(-driver_race)
+chisqTestResult = chisq.test(summaryDf2wayTable,1,correct=FALSE)
+chisqTestResult
 ```
 
-Let's perform permutation to assess the distribution of proportions under the null hypothesis of no relations.  This is a fairly large dataset so this analysis could take a couple of minutes to complete.
+This shows that the observed probabilities would be highly unlikely under the null hypothesis of independence between driver's race and searching.
+
+Let's look at the standardized residuals to see which cells seem particularly far from the expected.
 
 ```{r}
-nSamples=1000
+summaryDf2way = summaryDf2way %>% 
+  mutate(stdRes = (n - expected)/sqrt(expected))
+summaryDf2way
+```
 
-stopDataShuffled=stopData
-propDiffSim=array(NA,nSamples)
-for (i in 1:nSamples){
+Now let's compute the odds and odds ratios
+
+```{r}
+oddsSearchedBlack = summaryDf2way[summaryDf2way$searched==TRUE & summaryDf2way$driver_race=='Black',]$n / summaryDf2way[summaryDf2way$searched==FALSE & summaryDf2way$driver_race=='Black',]$n
+oddsSearchedBlack
+
+oddsSearchedWhite = summaryDf2way[summaryDf2way$searched==TRUE & summaryDf2way$driver_race=='White',]$n / summaryDf2way[summaryDf2way$searched==FALSE & summaryDf2way$driver_race=='White',]$n
+oddsSearchedWhite
+
+oddsRatio = oddsSearchedBlack/oddsSearchedWhite
+oddsRatio
+```
+
+Let's also compute the Bayes factor
+
+```{r}
+library(BayesFactor)
+
+bf = contingencyTableBF(as.matrix(summaryDf2wayTable), sampleType = "jointMulti")
+bf
+```
+
+#### Randomization test
+
+Let's perform random shuffling to assess the distribution of proportions under the null hypothesis of no relations.  This is a fairly large dataset so this analysis could take a couple of minutes to complete.
+
+```{r}
+nSamples=500
+
+shuffleChisq = function(stopDataShuffled) {
   stopDataShuffled$driver_race=sample(stopDataShuffled$driver_race)
-  t=table(stopDataShuffled$driver_race,stopDataShuffled$search_conducted)
-  tNorm=t/apply(t,1,sum)
-  propDiffSim[i]=tNorm[1,2]-tNorm[2,2]
+  csResult = chisq.test(stopDataShuffled$driver_race,stopDataShuffled$searched,correct=FALSE)
+  return(csResult$statistic)
 }
+
+shuffledChisqValues=replicate(nSamples,shuffleChisq(stopData))
+mean(shuffledChisqValues>=chisq)
 
 ```
 
 Let's compare the histogram of differences under the null hypothesis to the observed difference of 0.0197.
 
 ```{r}
-ggplot(data.frame(probDiffSim=propDiffSim),aes(probDiffSim)) +
-  geom_histogram(bins=100) +
-  geom_vline(xintercept = summaryTableNormalized[1,2]-summaryTableNormalized[2,2],color='blue') +
-  xlab('Difference in proportion of searches')
+ggplot(data.frame(shuffledChisqValues=shuffledChisqValues),aes(shuffledChisqValues)) +
+  geom_histogram(aes(y=..density..),bins=100) +
+  xlab('Chi-squared statistic value')
 ```
 
-### Chi-squared test
+### Chi-squared test beyond the 2-way table
 
-
-We want to test whether the proportion of searches differs between White and Black individuals. We can use the built-in R tool for comparing two proportions which uses a Chi-squared test.
+We can also analyze more complex data.
 
 ```{r}
-pTest=prop.test(table(stopData$driver_race,stopData$search_conducted), correct=FALSE) 
-print(pTest)
+
 ```
 
-Let's plot the Chi-squared distribution with one degree of freedom, which is the theoretical distribution we will use for this analysis.
-
-```{r}
-xvals=seq(1,10,0.05)
-csvals=dchisq(xvals,1)
-
-ggplot(data.frame(xvals=xvals,csvals=csvals),aes(xvals,csvals)) +
-  geom_line() + xlab('Value') + ylab('Chi-squared density')
-  #geom_vline(xintercept = pTest$statistic,color='blue')
-```
 
