@@ -227,7 +227,15 @@ dataSummary = NHANES_sample %>%
   group_by(Smoke100) %>%
   summarize(n=n(),varHeight=var(Height),meanHeight=mean(Height))
 
+n1 = dataSummary$n[dataSummary$Smoke100=='Yes']
+n2 = dataSummary$n[dataSummary$Smoke100=='No']
+var1 = dataSummary$varHeight[dataSummary$Smoke100=='Yes']
+var2 = dataSummary$varHeight[dataSummary$Smoke100=='No']
+
 # Calculate pooled SD
+pooledSD = sqrt(((n1-1) * var1 + (n2-1) * var2)/(n1+n2-2))
+
+# Or if you prefer to do it in one step:
 pooledSD = sqrt(((dataSummary$n[1]-1)*dataSummary$varHeight[1] + 
                   (dataSummary$n[2]-1)*dataSummary$varHeight[2])/
                   (sum(dataSummary$n)-2))
