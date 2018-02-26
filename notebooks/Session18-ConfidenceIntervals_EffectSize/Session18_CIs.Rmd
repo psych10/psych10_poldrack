@@ -1,0 +1,150 @@
+---
+title: "Confidence Intervals"
+output: html_notebook
+---
+
+we'll look at the relationship between being a physically active adult and weight using confidence intervals.
+
+load libraries
+```{r}
+library(tidyverse)
+library(NHANES)
+```
+
+make analysis reproducible
+```{r}
+set.seed(123456)
+```
+
+prep data
+
+```{r}
+NHANES_adult <- NHANES %>%
+  filter(Age > 17 & !is.na(PhysActive) & !is.na(Weight)) %>%
+  select(ID, PhysActive, Weight) %>%
+  unique()
+
+nrow(NHANES_adult) # size of our "population"
+```
+
+
+### theoretical CI using sample
+
+the most likely scenario when we want to estimate a population parameter is that we have a sample on which we can compute the estimate. let's sample 100 people from the NHANES dataset, and use the t distribution to find our critical values.
+
+```{r}
+NHANES_sample <- NHANES_adult %>%
+  sample_n(100)
+
+weight_sample_summary <- NHANES_sample %>%
+  group_by(PhysActive) %>%
+  summarise(n = n(), 
+            mean = mean(Weight), 
+            se = sd(Weight)/sqrt(n),
+            crit_val_lower = qt(.025, df = n - 1),
+            crit_val_upper = qt(.975, df = n - 1),
+            ci_lower = mean + crit_val_lower * se,
+            ci_upper = mean + crit_val_upper * se)
+
+ggplot(weight_sample_summary, aes(PhysActive, mean, color = PhysActive)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0, size = 2) +
+  ylab("Weight") +
+  theme(text=element_text(size=20))
+
+```
+
+### theoretical CI using "population"
+
+for comparison, let's say the entire NHANES dataset is the entire population of interest (N=4792). we can use the z distribution to find our critical values, because the true population mean is known. in this example, we are still assuming that true population standard deviation sigma is unknown.
+
+```{r}
+weight_summary <- NHANES_adult %>%
+  group_by(PhysActive) %>%
+  summarise(n = n(), 
+            mean = mean(Weight), 
+            se = sd(Weight)/sqrt(n),
+            crit_val_lower = qnorm(.025),
+            crit_val_upper = qnorm(.975),
+            ci_lower = mean + crit_val_lower * se,
+            ci_upper = mean + crit_val_upper * se)
+
+ggplot(weight_summary, aes(PhysActive, mean, color = PhysActive)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0, size = 2) +
+  ylab("Weight") +
+  theme(text=element_text(size=20))
+```
+
+### theoretical CI using sampling distribution
+
+rather than being limited to the sample estimate, or having to collect data encompassing the entire population, we can use the more computationally-intensive approach called bootstrapping. we'll sample (with replacement) from our NHANES sample (n=100) 1000 times. then we'll plot the distributions of bootstrap sample mean weights for physically active and inactive individuals.
+
+```{r}
+active_means <- c()
+inactive_means <- c()
+
+# take 1000 samples
+for (s in 1:1000) {
+  bs_sample <- sample_n(NHANES_sample, 100, replace = TRUE)
+  
+  # save active mean
+  active <- mean(bs_sample[bs_sample$PhysActive == 'Yes',]$Weight)
+  active_means <- c(active_means, active)
+  
+  # save inactive mean
+  inactive <- mean(bs_sample[bs_sample$PhysActive == 'No',]$Weight)
+  inactive_means <- c(inactive_means, inactive)
+}
+
+# put means in a data frame
+bs_df <- data.frame(Yes = active_means, No = inactive_means) %>%
+  gather(group, weight)
+
+# look at the sampling distributions
+ggplot(bs_df, aes(weight, fill = group)) +
+  facet_grid(group ~ .) +
+  geom_histogram(bins = 20)
+
+```
+
+we can take the theoretical approach of using the normal distribution to find upper and lower confidence limits using these bootstrap means.
+
+```{r}
+bs_weight_summary <- bs_df %>%
+  group_by(group) %>%
+  summarise(n = n(),
+            mean = mean(weight), 
+            sd = sd(weight),
+            crit_val_lower = qnorm(.025),
+            crit_val_upper = qnorm(.975),
+            ci_lower = mean + crit_val_lower * sd,
+            ci_upper = mean + crit_val_upper * sd)
+
+ggplot(bs_weight_summary, aes(group, mean, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0, size = 2)
+
+```
+
+### empirical CI using sampling distribution
+
+alternatively, we can compute empirical CIs with the percentile interval method. we simply take the 2.5th percentile and 97.5th percentile of the distribution of boostrap means to approximate the CI bounds.
+
+```{r}
+bs_weight_empir_summary <- bs_df %>%
+  group_by(group) %>%
+  summarise(mean = mean(weight), 
+            ci_lower = quantile(weight, .025),
+            ci_upper = quantile(weight, .975))
+
+ggplot(bs_weight_empir_summary, aes(group, mean, color = group)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0, size = 2) +
+  ylab("Weight") +
+  xlab("PhysActive") +
+  theme(text=element_text(size=20))
+
+
+```
+

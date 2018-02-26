@@ -1,0 +1,286 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(NHANES)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(BayesFactor)
+```
+
+
+This is the class notebook for Bayesian Stats lectures (Lectures 19 & 20).
+
+### "Forward sampling"
+
+It is straight-forward to go from a true population parameter to samples.
+
+```{r fig.width=8, fig.height=3}
+set.seed(123456)
+# true population proportion of people who have consumed cannabis
+population_parameter <- 0.3
+```
+
+generate a sample of 100 random people. If we ask 100 people how many of them have consumed cannabis, this is how many would say yes. The number is random because we are randomly sampling people from the population distribution.
+
+```{r}
+rbinom(n = 1, size = 100, prob = population_parameter)
+```
+
+We ask 100 people and we do that 1000 times, and visualize the resulting distribution
+
+```{r}
+rbinom(n = 10000, size = 100, prob = population_parameter) %>%
+  qplot(., bins  = 20)
+```
+
+How many people in NHANES have smoked marijuana before?
+
+```{r}
+NHANES %>% 
+  filter(Age > 17, !(is.na(Marijuana))) %>% # remove the kids and subjects with missing data
+  group_by(Marijuana) %>%
+  summarize(n = n()) %>%
+  mutate(relative_freq = n / sum(n))
+```
+
+What is the true population proportion of people?
+
+# Priors
+
+A priori, we will say we have no idea what the true population parameter is. It could be any number between 0 and 1.
+
+```{r}
+data.frame(
+  x = runif(n = 100000, min = 0, max = 1)
+) %>%
+  ggplot(., aes( x = x))+
+  geom_density()+
+  xlab("theta")+
+  ylab("probability density")
+  #scale_x_continuous(limits = c(-0.1, 1.1))
+```
+## Likelihoods
+
+The data we have is a forced choice (Yes vs. No). Multiple (independent) forced choice responses are samples from a Binomial distribution (i.e., they are binomially-distributed).
+
+```{r}
+hypothetical_true_population_parameter <- 0.3
+
+data.frame(
+  x = rbinom(n = 100000, size = 20, p = hypothetical_true_population_parameter)
+) %>%
+  group_by(x) %>%
+  summarize(n = n()) %>%
+  ungroup() %>%
+  mutate(prop = n / sum(n)) %>%
+  ggplot(., aes( x = x, y = prop))+
+  geom_bar(stat = 'identity')+
+  xlab("hypothetical data (positive observations)")+
+  ylab("probability mass")+
+  xlim(0, 20)+
+  ggtitle(paste("P(d | theta = ",hypothetical_true_population_parameter ,")", sep = ""))
+```
+
+## Rejection sampling algorithm
+
+Note that this will get slower as the probability of the data because more unlikely.
+
+```{r}
+observed_data <- 8
+number_of_observations <- 20
+
+rejection_sampler <- function(){
+  theta <- runif(min = 0, max = 1, n = 1)
+  simulated_data <- rbinom(p = theta, size = number_of_observations, n = 1)
+  if (simulated_data == observed_data){
+    return(theta)
+  }
+}
+
+# repeat many times
+samples <- replicate(100000, rejection_sampler())
+
+# make into a data frame and make historam
+posterior_samples <- data.frame(theta = unlist(samples[!sapply(samples, is.null)]))
+
+ggplot(posterior_samples, aes( x = theta ))+
+  #geom_histogram(bins = 20)+
+  geom_density()+
+  #geom_hline(yintercept = 1, lty = 2)+
+  xlim(0, 1)
+```
+
+```{r}
+quantile(posterior_samples$theta, probs = c(0.025, 0.975))
+```
+
+
+## Conjugate priors
+
+Uniform(0, 1) is the same as Beta(1,1).
+Beta is "conjugate" to the Binomial, which means that if your data is binomially-distributed and your prior is a Beta distribution, your posterior is also a Beta distribution.
+
+With some math, the posterior is:
+$Beta( 1 + k, 1 + n - k)$, where $k$ is the number of successes and $n-k$ is the number of failures.
+
+For a list of conjugate distributions, check out [this wikipedia article](https://en.wikipedia.org/wiki/Conjugate_prior#Table_of_conjugate_distributions)
+
+
+```{r}
+prior_parameters <- list(shape1 = 1, shape2 = 1) # as shape1 increases, the prior will favor higher numbers; as shape2 increases, the prior will favor lower numbers
+
+observed_data <- 8
+number_of_observations <- 20
+
+posterior_parameters <- list(
+  shape1 = prior_parameters$shape1 + observed_data,
+  shape2 = prior_parameters$shape2 + number_of_observations - observed_data
+  )
+
+bins <- seq(0.001, 0.999, 0.001)
+
+data.frame(
+  src = c(rep("posterior",length(bins)), rep("prior", length(bins))),
+  theta = c(bins, bins),
+  density = c(
+    dbeta(x = bins, shape1 = posterior_parameters$shape1, 
+          shape2 = posterior_parameters$shape2),
+    dbeta(x = bins, shape1 = prior_parameters$shape1, 
+          shape2 = prior_parameters$shape2)
+  )
+) %>%
+  ggplot(., aes( x = theta, y = density, linetype = src))+
+  geom_line()
+
+# ggsave(paste("figs/beta_priorA",  
+#              prior_parameters$a, 
+#              "B", prior_parameters$b,"_data",
+#              observed_data,"N",
+#              number_of_observations,".pdf",sep=""),
+#        width = 4.5, height = 2.5)
+```
+
+
+95% credible interval
+
+```{r}
+qbeta(p = c(0.025, 0.975),
+      shape1 = posterior_parameters$shape1, 
+      shape2 = posterior_parameters$shape2)
+```
+
+Parameter inference from NHANES
+
+```{r}
+prior_parameters <- list(shape1 = 1, shape2 = 1) # as shape1 increases, the prior will favor higher numbers; as shape2 increases, the prior will favor lower numbers
+
+nhanes.mj.sample <- NHANES %>% 
+  filter(Age > 17, !(is.na(Marijuana))) %>% # remove the kids and subjects with missing data
+  #sample_n(100) %>%
+  group_by(Marijuana) %>%
+  summarize(n = n()) %>%
+  spread(Marijuana, n)
+
+posterior_parameters <- list(
+  shape1 = prior_parameters$shape1 + nhanes.mj.sample$Yes,
+  shape2 = prior_parameters$shape2 + nhanes.mj.sample$No
+  )
+
+bins <- seq(0.001, 0.999, 0.001)
+
+data.frame(
+  src = c(rep("posterior",length(bins)), rep("prior", length(bins))),
+  theta = c(bins, bins),
+  density = c(
+    dbeta(x = bins, shape1 = posterior_parameters$shape1, 
+          shape2 = posterior_parameters$shape2),
+    dbeta(x = bins, shape1 = prior_parameters$shape1, 
+          shape2 = prior_parameters$shape2)
+  )
+) %>%
+  ggplot(., aes( x = theta, y = density, linetype = src))+
+  geom_line()
+```
+
+95% credible interval
+
+```{r}
+qbeta(p = c(0.025, 0.975),
+      shape1 = posterior_parameters$shape1, 
+      shape2 = posterior_parameters$shape2)
+```
+
+Men vs. women
+
+```{r}
+prior_parameters <- list(shape1 = 1, shape2 = 1) # as shape1 increases, the prior will favor higher numbers; as shape2 increases, the prior will favor lower numbers
+
+nhanes.mj.sample.gender <- NHANES %>% 
+  filter(Age > 17, !(is.na(Marijuana))) %>% # remove the kids and subjects with missing data
+  group_by(Gender) %>%
+  sample_n(100) %>%
+  group_by(Marijuana, Gender) %>%
+  summarize(n = n()) %>%
+  spread(Marijuana, n)
+
+posterior_parameters_female <- list(
+  shape1 = prior_parameters$shape1 + filter(nhanes.mj.sample.gender,Gender== "female")$Yes,
+  shape2 = prior_parameters$shape2 + filter(nhanes.mj.sample.gender,Gender== "female")$No
+  )
+
+posterior_parameters_male <- list(
+  shape1 = prior_parameters$shape1 + filter(nhanes.mj.sample.gender,Gender== "male")$Yes,
+  shape2 = prior_parameters$shape2 + filter(nhanes.mj.sample.gender,Gender== "male")$No
+  )
+
+bins <- seq(0.001, 0.999, 0.001)
+
+data.frame(
+  src = c(rep("female",length(bins)), rep("male",length(bins)), rep("prior", length(bins))),
+  theta = c(bins, bins, bins),
+  density = c(
+    dbeta(x = bins, shape1 = posterior_parameters_female$shape1, 
+          shape2 = posterior_parameters_female$shape2),
+      dbeta(x = bins, shape1 = posterior_parameters_male$shape1, 
+          shape2 = posterior_parameters_male$shape2),
+    dbeta(x = bins, shape1 = prior_parameters$shape1, 
+          shape2 = prior_parameters$shape2)
+  )
+) %>%
+  ggplot(., aes( x = theta, y = density, linetype = src, color = src))+
+  geom_line(size = 2)+
+  scale_color_solarized()
+```
+# Hypothesis Testing / Bayes Factors
+
+First the frequentist test.
+```{r}
+observed_yes <- 7
+number_of_observations <- 25
+
+binom.test(x = observed_yes, n = number_of_observations, p = 0.5)
+```
+
+Now the Bayesian test.
+
+```{r}
+proportionBF(y = observed_yes, N = number_of_observations, p = 0.5)
+```
+
+One sided Bayesian binomial test.
+
+```{r}
+proportionBF(y = observed_yes, N = number_of_observations, p = 0.5,
+             nullInterval = c(0, 0.5))
+```
+
+

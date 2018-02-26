@@ -1,0 +1,279 @@
+---
+title: "Effect Size"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(NHANES)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+This is the class notebook for the Effect Size portion of Session 18. 
+
+### p-value vs effect size
+
+As sample size increases, we obtain increasingly precise estimates of the population (See Session 12, slides 13-25). 
+
+```{r fig.width=8, fig.height=3}
+set.seed(123456)
+
+# Subset NHANES data to those above 17, with non-na values for Heigh and Smoke100
+NHANES_adult = NHANES %>% 
+  filter(Age>17 & !is.na(Height) & !is.na(Smoke100)) %>% 
+  select(Age,Smoke100,Height)  
+
+# Assume that this is our population. Let's see what it looks like:
+ggplot(NHANES_adult, aes(Height, fill = Smoke100)) +
+  geom_histogram(position = 'dodge') +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='No']), 
+             col = 'red', 
+             size = 1.5,
+             linetype = 2) +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='Yes']), 
+             col = 'blue', 
+             size = 1.5,
+             linetype = 2) +
+  coord_cartesian(xlim = c(140,190)) +
+  theme_classic() + 
+  theme(axis.text.x  = element_text(size=12,color="black"),
+        axis.text.y  = element_text(size=12,color="black"),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14)) 
+  
+```
+
+The histograms indicate that smokers are on average 2cm taller than non-smokers.  
+
+When we conduct analyses, we rarely have access to the entire population. Instead, we obtain smaller samples and try to make inferences about the population from those samples. The larger the sample size, the smaller our sampling error, and the more likely we are to detect a difference (see Sessions 16 and 17).  
+
+Let's look at what the distribution of sample means looks like for different sample means. As a reminder, to obtain the distribution of sample means, we randomly sample from the population many times, and for each iteration, we calculate the mean of the sample. In the following simulations, we draw 5000 samples:
+
+#### Sample Size = 10
+
+```{r fig.width=8, fig.height=3}
+sampSize=10
+nsamps=5000
+
+Yes=array(NA,nsamps)
+No=array(NA,nsamps)
+
+for (i in 1:nsamps){
+  NHANES_sample=sample_n(NHANES_adult,sampSize)
+  Yes[i]= mean(NHANES_sample$Height[NHANES_sample$Smoke100=='Yes'])
+  No[i] = mean(NHANES_sample$Height[NHANES_sample$Smoke100=='No'])
+}
+
+sampleMeans = data.frame(Yes,No)
+
+sampleMeans = sampleMeans %>%
+  gather(key = Smoke100, Height, Yes:No)
+
+ggplot(sampleMeans, aes(Height, fill = Smoke100)) +
+  geom_histogram(position = 'dodge') +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='No']), 
+             col = 'red', 
+             size = 1.5,
+             linetype = 2) +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='Yes']), 
+             col = 'blue', 
+             size = 1.5,
+             linetype = 2) +
+  coord_cartesian(xlim = c(140,190)) +
+  theme_classic() + 
+  theme(axis.text.x  = element_text(size=12,color="black"),
+        axis.text.y  = element_text(size=12,color="black"),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14))
+
+```
+
+#### Sample size = 100
+
+```{r fig.width=8, fig.height=3}
+sampSize=100
+nsamps=5000
+
+Yes=array(NA,nsamps)
+No=array(NA,nsamps)
+
+for (i in 1:nsamps){
+  NHANES_sample=sample_n(NHANES_adult,sampSize)
+  Yes[i]= mean(NHANES_sample$Height[NHANES_sample$Smoke100=='Yes'])
+  No[i] = mean(NHANES_sample$Height[NHANES_sample$Smoke100=='No'])
+}
+
+sampleMeans = data.frame(Yes,No)
+
+sampleMeans = sampleMeans %>%
+  gather(key = Smoke100, Height, Yes:No)
+
+ggplot(sampleMeans, aes(Height, fill = Smoke100)) +
+  geom_histogram(position = 'dodge') +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='No']), 
+             col = 'red', 
+             size = 1.5,
+             linetype = 2) +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='Yes']), 
+             col = 'blue', 
+             size = 1.5,
+             linetype = 2) +
+  coord_cartesian(xlim = c(140,190)) +
+  theme_classic() + 
+  theme(axis.text.x  = element_text(size=12,color="black"),
+        axis.text.y  = element_text(size=12,color="black"),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14))
+
+```
+
+#### Sample size = 1000
+
+```{r fig.width=8, fig.height=3}
+sampSize=1000
+nsamps=5000
+
+Yes=array(NA,nsamps)
+No=array(NA,nsamps)
+
+for (i in 1:nsamps){
+  NHANES_sample=sample_n(NHANES_adult,sampSize)
+  Yes[i]= mean(NHANES_sample$Height[NHANES_sample$Smoke100=='Yes'])
+  No[i] = mean(NHANES_sample$Height[NHANES_sample$Smoke100=='No'])
+}
+
+sampleMeans = data.frame(Yes,No)
+
+sampleMeans = sampleMeans %>%
+  gather(key = Smoke100, Height, Yes:No)
+
+ggplot(sampleMeans, aes(Height, fill = Smoke100)) +
+  geom_histogram(position = 'dodge') +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='No']), 
+             col = 'red', 
+             size = 1.5,
+             linetype = 2) +
+  geom_vline(xintercept = mean(NHANES_adult$Height[NHANES_adult$Smoke100=='Yes']), 
+             col = 'blue', 
+             size = 1.5,
+             linetype = 2) +
+  coord_cartesian(xlim = c(140,190)) +
+  theme_classic() + 
+  theme(axis.text.x  = element_text(size=12,color="black"),
+        axis.text.y  = element_text(size=12,color="black"),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14))
+
+```
+
+As sample size increases, so does the precision of our estimate of the population means, and thus more likely to detect a difference in means.    
+
+### Calculating Cohen's d 
+
+Let's take a sample of 100, and calculate the Cohen's d of the difference between Height of Smokers vs. Non-smokers. 
+
+```{r fig.width=8, fig.height=3}
+set.seed(7)
+
+# Obtain a random sample of 100 individuals
+NHANES_sample = sample_n(NHANES_adult,100)
+
+# Plot to see what the distribution looks like
+ggplot(NHANES_sample, aes(Height, fill = Smoke100)) +
+  geom_histogram(position = 'dodge', bins = 15) +
+  geom_vline(xintercept = mean(NHANES_sample$Height[NHANES_sample$Smoke100=='No']), 
+             col = 'red', 
+             size = 1.5,
+             linetype = 2) +
+  geom_vline(xintercept = mean(NHANES_sample$Height[NHANES_sample$Smoke100=='Yes']), 
+             col = 'blue', 
+             size = 1.5,
+             linetype = 2) +
+  coord_cartesian(xlim = c(140,190)) +
+  theme_classic() + 
+  theme(axis.text.x  = element_text(size=12,color="black"),
+        axis.text.y  = element_text(size=12,color="black"),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size=14))
+```
+
+Let's then run a t-test to see if the heights of smokers and non-smokers are significantly different:
+```{r}
+t.test(Height ~ Smoke100, data = NHANES_sample)
+```
+
+Like any other statistic estimated from a sample, the effect size is susceptible to sampling error. That is to say, sometimes the effect size estimated by the sample underestimates the population effect size, while other times it overestimates the population effect size. In this case, the mean difference in means is about 5cm, which overestimates the population effect size quite a bit.  
+
+Regardless, let's calculate Cohen's d:
+
+\[
+\hat{d} = \frac{\bar{X_1} - \bar{X_2}}{s_p}
+\]
+
+where \[s_p = \sqrt{\frac{(N_1 -1)s^2_1 + (N_2-1)s^2_2}{N_1 + N_2 - 2}}\]
+
+So the first thing we want to do is to compute X, N and s^2 for each group. To do that, we want to use our old friends, group_by and summarize
+
+
+```{r}
+# Take NHANES_sample, group_by Smoke100, and for each group calculate the number of individuals, mean Height and variance of the Height
+dataSummary = NHANES_sample %>%
+  group_by(Smoke100) %>%
+  summarize(n=n(),varHeight=var(Height),meanHeight=mean(Height))
+
+n1 = dataSummary$n[dataSummary$Smoke100=='Yes']
+n2 = dataSummary$n[dataSummary$Smoke100=='No']
+var1 = dataSummary$varHeight[dataSummary$Smoke100=='Yes']
+var2 = dataSummary$varHeight[dataSummary$Smoke100=='No']
+
+# Calculate pooled SD
+pooledSD = sqrt(((n1-1) * var1 + (n2-1) * var2)/(n1+n2-2))
+
+# Or if you prefer to do it in one step:
+pooledSD = sqrt(((dataSummary$n[1]-1)*dataSummary$varHeight[1] + 
+                  (dataSummary$n[2]-1)*dataSummary$varHeight[2])/
+                  (sum(dataSummary$n)-2))
+
+# Calculate mean difference
+meanDifference = diff(dataSummary$meanHeight)
+
+# Calculate Cohen's d
+effectSizeCohensD = meanDifference/pooledSD
+effectSizeCohensD
+```
+
+### Pearson's R
+
+Let's compute the correlation coefficient between Age and Height for Children and Adults separately
+
+#### Adults
+```{r}
+
+ggplot(NHANES_adult, aes(x = Age, y = Height)) +
+  geom_point() +
+  geom_smooth(method = lm)
+
+cor(NHANES_adult$Age,NHANES_adult$Height)
+```
+
+#### Children
+```{r}
+NHANES_Children = NHANES %>% 
+  filter(Age < 18 & !is.na(Height)) %>% 
+  select(Age,Smoke100,Height)  
+
+ggplot(NHANES_Children, aes(x = Age, y = Height)) +
+  geom_point() +
+  geom_smooth(method = lm)
+
+cor(NHANES_Children$Age,NHANES_Children$Height)
+```
+
+
+
