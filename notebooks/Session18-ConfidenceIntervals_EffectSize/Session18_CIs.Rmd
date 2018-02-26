@@ -11,7 +11,7 @@ library(tidyverse)
 library(NHANES)
 ```
 
-make analysis replicable
+make analysis reproducible
 ```{r}
 set.seed(123456)
 ```
@@ -40,7 +40,7 @@ weight_sample_summary <- NHANES_sample %>%
   group_by(PhysActive) %>%
   summarise(n = n(), 
             mean = mean(Weight), 
-            se = sd(Weight)/n,
+            se = sd(Weight)/sqrt(n),
             crit_val_lower = qt(.025, df = n - 1),
             crit_val_upper = qt(.975, df = n - 1),
             ci_lower = mean + crit_val_lower * se,
@@ -56,14 +56,14 @@ ggplot(weight_sample_summary, aes(PhysActive, mean, color = PhysActive)) +
 
 ### theoretical CI using "population"
 
-for comparison, let's say the entire NHANES dataset is the entire population of interest (N=4792). we can use the z distribution to find our critical values.
+for comparison, let's say the entire NHANES dataset is the entire population of interest (N=4792). we can use the z distribution to find our critical values, because the true population mean is known. in this example, we are still assuming that true population standard deviation sigma is unknown.
 
 ```{r}
 weight_summary <- NHANES_adult %>%
   group_by(PhysActive) %>%
   summarise(n = n(), 
             mean = mean(Weight), 
-            se = sd(Weight)/n,
+            se = sd(Weight)/sqrt(n),
             crit_val_lower = qnorm(.025),
             crit_val_upper = qnorm(.975),
             ci_lower = mean + crit_val_lower * se,
