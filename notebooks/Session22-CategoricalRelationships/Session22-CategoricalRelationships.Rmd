@@ -252,12 +252,4 @@ ggplot(data.frame(shuffledChisqValues=shuffledChisqValues),aes(shuffledChisqValu
   xlab('Chi-squared statistic value')
 ```
 
-### Chi-squared test beyond the 2-way table
-
-We can also analyze more complex data.
-
-```{r}
-
-```
-
 
