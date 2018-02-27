@@ -14,67 +14,128 @@ library(tidyr)
 library(NHANES)
 library(cowplot)
 library(igraph)
-library('MBESS')
+#library('MBESS')
 
+set.seed(123456)
 ```
 
-First let's set up a simple linear model using simulated data.  Let's simulate the relationship between age and height.  We will select a set of ages from a uniform distribution between 6 and 18, and then generate heights and add random noise.  We will use parameter values estimated from the NHANES data, so let's first determine those.
+First let's set up a simple linear model using simulated data.
 
 ```{r}
 
-NHANES$isChild <- NHANES$Age<18
-NHANES_child=subset(NHANES,subset=isChild & Height!='NA')
-lm.result=lm(Height~Age,data=NHANES_child)
-print(lm.result)
+slope=0.4
+noiseLevel=1
 
-minAge=6
-maxAge=18
-nPoints=48
-noiseLevel=sd(lm.result$residuals)
-dataDf=data.frame(Age=minAge + (maxAge-minAge)*runif(nPoints))
+x=seq(-4,4)
+y=x*slope + rnorm(length(x))*noiseLevel
+y=y-mean(y)
+
+dataDf=data.frame(x,y)
 
 # we can use the predict() function to predict heights for a new set of ages 
 # based on the model estimated from the NHANES dataset
 
-dataDf$Height=predict(lm.result,newdata=dataDf) + rnorm(nPoints,sd=noiseLevel)
-
-
+save(dataDf,file='simData.Rdata')
 ```
 
-We can compare the results of the same model applied to our simulated data, to make sure that they are similar.
+We can compare the results of the same model applied to our simulated data, to make sure that they are similar.  Since we demeaned both the x and y variables, we can leave the intercept out of the model to make it simpler; we do that by including "+ 0" in the lm() command.
 
 ```{r}
-lm.resultSimulated=lm(Height~Age,data=dataDf)
-print(summary(lm.resultSimulated))
+lmResultSimulated=lm(y~x + 0)
+print(lmResultSimulated)
+print(summary(lmResultSimulated))
+```
+
+Show how we could solve the problem using linear algebra.  We use the pseudoinverse:
+
+\[
+\beta = (X'X)^{-1}X'y
+\]
+
+This requires matrix multiplication, which we can perform using the %*% operator in R.  The matrix transpose (noted by the ' symbol in the equation) is performed using t() in R.
+
+```{r}
+xmat=as.matrix(x)
+ymat=as.matrix(y)
+beta_hat = (t(xmat)%*%xmat)^-1*t(xmat)%*%ymat
+print(beta_hat)
+```
+
+We know theoretically that the best fitting model parameters are those that minimize the squared error.  Let's demonstrate this by trying out a set of possible values for the Age parameter and measuring the squared residuals. We will make an anim
+
+```{r}
+simDf=data.frame(beta=seq(0.0,1.0,0.01))
+
+runLm = function(simDf,dataDf){
+  predicted = dataDf$x * simDf$beta
+  simDf$MSE=mean((dataDf$y - predicted)**2)
+  return(simDf)
+}
+
+simDf = simDf %>% group_by(beta) %>% do(runLm(.,dataDf))
+dataDf$predicted=predict(lmResultSimulated)
+dataDf$residual=lmResultSimulated$residuals
+
+ggplot(simDf,aes(beta,MSE)) + 
+  geom_line() +
+  annotate('point',x=lmResultSimulated$coefficients[1],y=mean(lmResultSimulated$residuals**2),color='blue')
+
 ```
 
 Let's plot the data compared to the model and show the residuals.
 
 ```{r}
-dataDf$predicted=predict(lm.resultSimulated)
-dataDf$residual=lm.resultSimulated$residuals
-p=ggplot(dataDf,aes(Age,Height)) +
-  geom_point() + geom_smooth(method='lm',se=FALSE)
+dataDf$predicted=mean(dataDf$y)
+dataDf$residual=dataDf$y - mean(dataDf$y)
+p=ggplot(dataDf,aes(x,y)) +
+  xlab('Change in study time (hours)') +
+  ylab('Change in final grade (points)') +
+  geom_point() + geom_hline(yintercept = mean(dataDf$y),color='blue')
 for (i in 1:dim(dataDf)[1]){
-  p=p+annotate('segment',x=dataDf$Age[i],xend=dataDf$Age[i],
-               y=dataDf$predicted[i],yend=dataDf$Height[i],color='red',linetype='dashed')
+  p=p+annotate('segment',x=dataDf$x[i],xend=dataDf$x[i],
+               y=dataDf$predicted[i],yend=dataDf$y[i],color='red',linetype='dashed')
 }
 print(p)
+
+
+dataDf$predicted=predict(lmResultSimulated)
+dataDf$residual=lmResultSimulated$residuals
+p=ggplot(dataDf,aes(x,y)) +
+  xlab('Change in study time (hours)') +
+  ylab('Change in final grade (points)') +
+  geom_point() + geom_smooth(method='lm',se=FALSE)
+for (i in 1:dim(dataDf)[1]){
+  p=p+annotate('segment',x=dataDf$x[i],xend=dataDf$x[i],
+               y=dataDf$predicted[i],yend=dataDf$y[i],color='red',linetype='dashed')
+}
+print(p)
+
+p=ggplot(dataDf,aes(x,y)) +
+  geom_point() + 
+  xlab('Change in study time (hours)') +
+  ylab('Change in final grade (points)')
+print(p)
+
+print('sum of residuals')
+print(sum(dataDf$residual))
+print('mean of squared residuals')
+print(mean(lmResultSimulated$residuals**2))
+
 ```
 
 We can plot the residuals in a couple of ways, to see what they look like.
 
-First, let's just plot a histogram of residuals.
+First, let's just plot a histogram of residuals (though in this example there are too few data points for this to make sense).
 
 ```{r}
 ggplot(dataDf,aes(residual)) +
   geom_histogram()
 ```
 
-They should be centered around zero and be roughly normally distributed.  We can also plot the residuals against age, to see if there is any relationship.
+They should be centered around zero and be roughly normally distributed.  We can also plot the residuals against age, to see if there is any relationship.  We first standardize both variables (i.e. turn them into z-scores). 
 
 ```{r}
-ggplot(dataDf,aes(Age,residual)) +
+ggplot(dataDf,aes(scale(x),scale(residual))) +
   geom_point() + geom_smooth(method='lm',se=FALSE)
 
 ```
@@ -84,25 +145,23 @@ Here we don't see any relationship between age and the residuals - meaning that 
 #### Linearity
 
 The data above were generated by a linear model.
-Now let's look at what happens with the assumption of linearity is violated.
-Let's pretend that we are looking at a new species of alien organisms, who grow for a few years but then start shrinking.  We can model this by making height a function of age squared, after centering age around zero; we multiply this by negative one to invert it.
+Now let's look at what happens with the assumption of linearity is violated; we will create a dataset similar to the one above, but in this case the relation between x and y is nonlinear (quadratic, to be specific).
 
 ```{r}
-dataDf$AgeDemeaned=dataDf$Age-mean(dataDf$Age)
-dataDf$AgeDemeanedSquaredInverted=-1*(dataDf$AgeDemeaned)**2
-
-ggplot(dataDf,aes(Age,AgeDemeanedSquaredInverted )) +
-         geom_point()
+dataDf$xQuadratic=-1*(dataDf$x)**2
+dataDf$xQuadratic = dataDf$xQuadratic - mean(dataDf$xQuadratic)
+ggplot(dataDf,aes(x,xQuadratic )) +
+         geom_line()
 
 ```
 
 Now let's generate some data based on this relationship.
 
 ```{r}
-dataDf$HeightNonlinear = lm.result$coefficients[1] + dataDf$AgeDemeanedSquaredInverted + rnorm(nPoints,sd=noiseLevel)
-
-ggplot(dataDf,aes(Age,HeightNonlinear )) +
-         geom_point()
+dataDf$yQuadratic = dataDf$xQuadratic + rnorm(nrow(dataDf),sd=noiseLevel)
+dataDf$yQuadratic = dataDf$yQuadratic - mean(dataDf$yQuadratic)
+ggplot(dataDf,aes(x,yQuadratic )) +
+  geom_point()
 
 ```
 
@@ -112,8 +171,8 @@ Now you can see that there is pretty clearly a nonlinear relationship between ag
 Now let's say that we haven't looked very closely at our data, and we decided to fit a linear model to the data.  What happens?
 
 ```{r}
-lm.resultSimulatedNonlinear=lm(HeightNonlinear~Age,data=dataDf)
-print(summary(lm.resultSimulatedNonlinear))
+lmResultIncorrectModel=lm(yQuadratic~x + 0,data=dataDf)
+print(summary(lmResultIncorrectModel))
 
 ```
 
@@ -123,433 +182,523 @@ Now we see that there is no significant relationship between age and height acco
 Let's look at the residuals to see if this is evident.
 
 ```{r}
-dataDf$residualNonlinear=lm.resultSimulatedNonlinear$residuals
-ggplot(dataDf,aes(residualNonlinear)) +
-  geom_histogram()
+dataDf$residualIncorrectModel=lmResultIncorrectModel$residuals
 
-ggplot(dataDf,aes(Age,residualNonlinear)) +
+ggplot(dataDf,aes(scale(x),scale(residualIncorrectModel))) +
   geom_point() + geom_smooth(method='lm',se=FALSE)
 
 ```
 
-We don't really see anything obvious in the histogram, but it's clear in the plot of residuals versus age that there is somethign going on; even though the line still sits at zero, we can see that the residuals vary systematically with age.  
+It's clear in the plot of residuals versus x that there is somethign going on; even though the line still sits at zero, we can see that the residuals vary systematically with the value of X.  
 
-#### Additivity
+Moral of the story: Always examine residuals.
 
+How could we address this?  One way is to explicitly put the nonlinear term into the model.  So, instead of:
 
+\[
+y = x*\beta 
+\]
 
-#### Independence of errors
+we could use:
 
-When we fit a model to data and compute p-values from the model, we assume that the errors are independent between the observations.  If we are sampling individuals randomly from the population then this should be true, but what happens if this assumption is violated?
+\[
+y = x*\beta_1 + x^2*\beta_2
+\]
 
-let's pretend that food supply in our population fluctuates over time, such that people born near each other in time are more likely to have similar heights.
-
-
-```{r}
-correlatedNoise=as.vector(arima.sim(list(ar=0.9),n=nPoints))
-
-dataDf$HeightCorr=predict(lm.result,newdata=dataDf) + correlatedNoise*10
-# make a dataset with the same amount of noise, but independent
-dataDf$HeightInd=predict(lm.result,newdata=dataDf) + rnorm(nPoints)*sd(correlatedNoise)
-
-ggplot(dataDf,aes(Age,HeightCorr)) +
-  geom_point()
-```
-
-Now let's use randomization testing to see whether this correlation has an effect on the p-values obtained from a simple linear model.
+Let's fit that model, and look at the results:
 
 ```{r}
-nRuns=5000
-pvalsCorr=array(NA,nRuns)
-pvalsInd=array(NA,nRuns)
-dataDfRand=dataDf
-for (i in 1:nRuns){
-  dataDfRand$Age=sample(dataDfRand$Age)
-  modelRandInd=lm(HeightInd~Age,data=dataDfRand)
-  pvalsInd[i]=summary(modelRandInd)$coefficients[2,4]
-  modelRandCorr=lm(HeightCorr~Age,data=dataDfRand)
-  pvalsCorr[i]=summary(modelRandCorr)$coefficients[2,4]
-}
-print(paste('Proportion of false positives (independent):',mean(pvalsInd<0.05)))
-print(paste('Proportion of false positives (correlated):',mean(pvalsCorr<0.05)))
+dataDf$xSquared = x**2 - mean(x**2)
+lmResultQuadraticModel = lm(yQuadratic~ x + xSquared + 0, data=dataDf)
+print(summary(lmResultQuadraticModel))
 
 ```
 
-It appears that the correlation doesn't affect the Type I error of the test. What about its power?  To measure this, let's generate a bunch of datasets with either correlated or independent noise, and see what this does to the standard errors of the estimates and the power of the test.
+We can plot the predicted response from this more appopriate model:
+
 ```{r}
+dataDf$predictedQuadratic = predict(lmResultQuadraticModel)
 
-nRuns=5000
-outputDf=data.frame(noiseType=array(NA,nRuns*2),
-                    pval=array(NA,nRuns*2),
-                    beta=array(NA,nRuns*2),
-                    residualSE=array(NA,nRuns*2))
-
-noiseLevel=20 # add a lot of noise here so that power is less than 1
-
-for (i in seq(1,nRuns*2,2)){
-  dataDfSim=data.frame(Age=dataDf$Age)
-  correlatedNoise=as.vector(arima.sim(list(ar=0.9),n=nPoints))*noiseLevel
-  correlatedNoise=correlatedNoise-mean(correlatedNoise)
-  dataDfSim$HeightCorr=predict(lm.result,newdata=dataDfSim) + correlatedNoise
-  dataDfSim$HeightInd=predict(lm.result,newdata=dataDfSim) + rnorm(nPoints)*sd(correlatedNoise)
-
-  modelInd=lm(HeightInd~Age,data=dataDfSim)
-  scInd=summary(modelInd)$coefficients
-  outputDf[i,1]='Independent'
-  outputDf[i,2:4]=c(scInd[2,4],scInd[2,1],sqrt(sum(modelInd$residuals**2))/sqrt(nPoints-2))
-
-  modelCorr=lm(HeightCorr~Age,data=dataDfSim)
-  scCorr=summary(modelCorr)$coefficients
-  outputDf[i+1,1]='Correlated'
-  outputDf[i+1,2:4]=c(scCorr[2,4],scCorr[2,1],sqrt(sum(modelCorr$residuals**2))/sqrt(nPoints-2))
-}
+ggplot(dataDf,aes(x,yQuadratic)) + 
+  geom_point() + 
+  geom_line(aes(x,predictedQuadratic),color='blue')
 ```
 
-```{r}
-outputDf$noiseType=as.factor(outputDf$noiseType)
-outputDf$sig=outputDf$pval<0.05
-resultsDf=outputDf %>% group_by(noiseType) %>% 
-    summarise(Mean.beta.estimate=mean(beta),
-              SD.of.beta.estimates=sd(beta),
-              Power=mean(sig),
-              Mean.residual.SE=mean(residualSE))
-print(resultsDf)
-
-```
-
-We see a couple of things here:
-
-- The mean beta estimates for both datasets are very similar and very close to the true value (5.463).  This is consistent with our knowledge that correlated errors do not lead to biased parameter estimates. 
-- The beta estimates are much more variable when the noise is correlated, compared to when the noise is independent.
-- The power for the analyses with independent errors is substantially higher than the power of the anlayses with correlated errors. This occurs even though the residual error is actually a bit higher for the independent case.
-
-Let's plot the distributions of parameter estimates for the two cases, to see just how they differ.
-```{r}
-
-a=ggplot(subset(outputDf,noiseType=='Independent'),aes(beta)) +
-  geom_histogram(aes(y=..density..),bins=50) +xlim(-20,30) + ylim(0,0.3) +
-  ggtitle('Independent') + xlab('Beta estimate')
-b=ggplot(subset(outputDf,noiseType=='Correlated'),aes(beta)) +
-  geom_histogram(aes(y=..density..),bins=50) +xlim(-20,30) + ylim(0,0.3) +
-  ggtitle('Correlated')+ xlab('Beta estimate')
-plot_grid(a,b,nrow=2)
-```
-
-### Homoscedasticity/homogeneity of variance
-
-Another assumption that we make is that variances are the same for all observations.   This is particularly important when we are comparing two groups to one another.  For this example, let's simulate some data in which we look for the difference in height between children from two different groups: one with poor nutrition, and one with good nutrition.  Let's say that nutrition has an effect of 1/2 a standard deviation (which is a medium-sized effect).  
-
-In this case, let's suppose that the variabilty is much larger in the poor nutrition group.
+This clearly fits much better!  We can also plot the residuals against the x value:
 
 ```{r}
+dataDf$residualQuadraticModel=lmResultQuadraticModel$residuals
 
-nPerGroup=24
-noiseSD=10
-noiseSDdiff=2
-groupDiffSD=0.5
-
-groupDataDf=data.frame(Nutrition=c(rep('Good',nPerGroup),rep('Poor',nPerGroup)),
-                       Height=c(rnorm(nPerGroup)*noiseSD+mean(NHANES_child$Height),rnorm(nPerGroup)*noiseSD*noiseSDdiff+mean(NHANES_child$Height)))
-groupDataDf$Height[groupDataDf$Nutrition=='Good']=groupDataDf$Height[groupDataDf$Nutrition=='Good']+sd(groupDataDf$Height)*groupDiffSD
-ggplot(groupDataDf,aes(y=Height,x=Nutrition)) +
-  geom_boxplot()
-
-t.test(Height~Nutrition,data=groupDataDf)
-```
-
-Let's first see what this unequal variances do to the type I error.  To test this, let's randomly generate data for two groups with equal means but unequal variances, and see how often we find a significant test. Because we know that the effects of unequal variance have the largest effect when the higher-variance group is also smaller, we simulate this situation.
-
-```{r}
-nRuns=5000
-pvalsHetero=array(NA,nRuns)
-pvalsEqual=array(NA,nRuns)
-assumeEqualVariance=TRUE
-
-groupSizes=c(72,24)
-#groupSizes=c(48,48)
-
-noiseSD=1
-noiseSDdiff=4
-
-for (i in 1:nRuns){
-  groupDataDf=data.frame(Nutrition=c(rep('Good',groupSizes[1]),rep('Poor',groupSizes[2])),
-                       HeightHetero=c(rnorm(groupSizes[1])*noiseSD+mean(NHANES_child$Height),
-                                      rnorm(groupSizes[2])*noiseSD*noiseSDdiff+mean(NHANES_child$Height)),
-                       HeightEqual=c(rnorm(sum(groupSizes))*noiseSD+mean(NHANES_child$Height)))
-  pvalsEqual[i]=t.test(HeightEqual~Nutrition,data=groupDataDf,var.equal=assumeEqualVariance)$p.value
-  pvalsHetero[i]=t.test(HeightHetero~Nutrition,data=groupDataDf,var.equal=assumeEqualVariance)$p.value
-}
-print(paste('Proportion of false positives (equal variance):',mean(pvalsEqual<0.05)))
-print(paste('Proportion of false positives (unequal variance):',mean(pvalsHetero<0.05)))
-
-```
-
-Clearly, the standard t-test shows inflated Type I error in this situation.  This can be prevented by using an adaptation of the t-test that accounts for unequal variances. To see this, try seting assumeEqualVariance to FALSE and see how the result changes.
-
-#### Normality and external variables
-
-The methods that we use to compute p-values and confidence intervals generall require that the errors in the model are normally distributed.  Note that this doesn't mean that the data are normally distributed. Let's look at an example - let's say that the effect of nutrition on height was really large:
-
-```{r}
-groupSizes=c(128,128)
-groupEffect=6
-groupDataDf=data.frame(Nutrition=c(rep('Good',groupSizes[1]),rep('Poor',groupSizes[2])),
-                       Height=rnorm(sum(groupSizes))+mean(NHANES_child$Height))
-
-groupDataDf$Height[groupDataDf$Nutrition=='Good']=groupDataDf$Height[groupDataDf$Nutrition=='Good'] + groupEffect
-
-ggplot(groupDataDf,aes(Height,fill=Nutrition)) +
-  geom_histogram(bins=100)
-```
-
-
-If we were to build a model of the data that didn't include nutrition (which is what the book would refer to as an "external variable"), then the residuals will be highly non-normal:
-
-```{r}
-model0=lm(Height~1,data=groupDataDf)
-ggplot(data.frame(residuals=model0$residuals),aes(residuals)) +
-  geom_histogram(bins=50)
-```
-
-But if we build an appropriate model that accounts for the effect of nutrition, then the residuals should look roughly normal:
-
-```{r}
-model1=lm(Height~Nutrition,data=groupDataDf)
-ggplot(data.frame(residuals=model1$residuals),aes(residuals)) +
-  geom_histogram(bins=50)
+ggplot(dataDf,aes(scale(x),scale(residualQuadraticModel))) +
+  geom_point() + geom_smooth(method='lm',se=FALSE)
 
 ```
 
 
-In general, the statistical tests that we use are fairly robust to violations of normality, but this breaks down if the data are highly non-normal (as they will be in a long-tailed distribution) and/or the samples are very small.  
+Now we see that there is no longer any clear relation between the x value and the residuals.
 
-Let's run a simulation to see whether the t-test is robust to extreme non-normality.  Let's say that we want to compare the number of Facebook friends between students at Stanford and USC. Let's first see what happens in the case where there is no actual difference.
-
-```{r}
-
-nPerGroup=48
-popSize=8000
-popUSC=degree(barabasi.game(popSize))
-popStanford=degree(barabasi.game(popSize))
-
-groupDataDf=data.frame(Group=c(rep('Stanford',nPerGroup),rep('USC',nPerGroup)),
-                       Nfriends=c(sample(popStanford,nPerGroup),
-                                  sample(popUSC,nPerGroup)))
+Moral of this story: Always use the right model.  How do you know which model is right, you might ask?  See the crossvalidation tutorial for more on that.
 
 
+#### Independence of errors: t-test
 
-ggplot(groupDataDf,aes(x=Nfriends,color=Group)) +
-  geom_freqpoly(binwidth=1) +
-  xlim(min(groupDataDf$Nfriends),max(groupDataDf$Nfriends)+1)
+Let's look at an example of how violations of the assumption of independent errors can affect a simple t-test.
 
-t.test(Nfriends~Group,data=groupDataDf)
+Let's say that we are comparing the relation between drinking soy milk and height in a groups of people from a campus club.  Unbeknownst to us, the subjects in our study are members of the Identical Quadruplets club, which consists entirely of identical quadruplets, and each quartet has the same preference for or against soy milk.
 
-```
-
-
-Let's simulate this situation to see how non-normality affects p-values. We will also use a test called the Wilcoxon rank sum test, which is a *nonparametric* test that does not assume normality. 
+Let's generate the data for group.
 
 ```{r}
-nRuns=5000
-pvalsBA=array(NA,nRuns)
-pvalsBAlog=array(NA,nRuns)
-pvalsBAw=array(NA,nRuns)
-assumeEqualVariance=FALSE 
-
-nPerGroup=16
-popSize=8000
-popUSC=degree(barabasi.game(popSize))
-popStanford=degree(barabasi.game(popSize))
-
-for (i in 1:nRuns){
-# first create large populations that we will sample from
-  groupDataDf=data.frame(Group=c(rep('Stanford',nPerGroup),rep('USC',nPerGroup)),
-                       Nfriends=c(sample(popStanford,nPerGroup),
-                                  sample(popUSC,nPerGroup)))
-  groupDataDf$logNfriends=log(groupDataDf$Nfriends)
-  pvalsBA[i]=t.test(Nfriends~Group,data=groupDataDf,var.equal=assumeEqualVariance)$p.value
-  pvalsBAlog[i]=t.test(logNfriends~Group,data=groupDataDf,var.equal=assumeEqualVariance)$p.value
-  pvalsBAw[i]=wilcox.test(Nfriends~Group,data=groupDataDf,exact=FALSE)$p.value
-
-}
-print(paste('Proportion of false positives (scale free network):',mean(pvalsBA<0.05)))
-print(paste('Proportion of false positives (scale free network - log transform):',mean(pvalsBAlog<0.05)))
-print(paste('Proportion of false positives (scale free network- Wilcoxon test):',mean(pvalsBAw<0.05)))
-
-```
-
-Here we see that the t-test applied to these non-normal data results in slightly conservative behavior.  Log-transforming the data seems to help a bit with this. 
-
-
-Now let's see how well these different approaches work to detect a true effect when it exists --- that is, their power. This time, we will simulate data in which the Stanford students are roughly twice as friendly as the USC students, and see whether we can detect such a huge difference in a small sample of 24 subjects from each university.
-
-```{r}
-nRuns=5000
-nPerGroup=24
-popSize=8000
-popUSC=degree(sample_pa(popSize))
-popStanford=degree(sample_pa(popSize,m=2))
-
-outputDf=data.frame(model=array(NA,nRuns*3),
-                    pval=array(NA,nRuns*3))
-
-
-for (i in seq(1,nRuns*3,3)){
-  dataDf=data.frame(Group=c(rep('Stanford',nPerGroup),rep('USC',nPerGroup)),
-                       Nfriends=c(sample(popStanford,nPerGroup),
-                                  sample(popUSC,nPerGroup)))
-  dataDf$logNfriends=log(dataDf$Nfriends)
-  outputDf[i,1]='T-test(raw)'
-  outputDf[i,2]=t.test(Nfriends~Group,data=dataDf,var.equal=FALSE)$p.value
-  outputDf[i+1,1]='T-test(log)'
-  outputDf[i+1,2]=t.test(logNfriends~Group,data=dataDf,var.equal=FALSE)$p.value
-  outputDf[i+2,1]='Wilcoxon(raw)'
-  outputDf[i+2,2]=wilcox.test(Nfriends~Group,data=dataDf,exact=FALSE)$p.value
-}
-```
-
-```{r}
-outputDf$model=as.factor(outputDf$model)
-outputDf$sig=outputDf$pval<0.05
-resultsDf=outputDf %>% group_by(model) %>% 
-    summarise(Power=mean(sig)) 
-print(resultsDf[order(resultsDf$Power,decreasing=TRUE),])
-
-```
-
-Here we see that the nonparametric test does the best, with the t-test on the log-transformed data close behind. The t-test on the raw data performs very badly, only detecting this effect about half as well as the Wilcoxon test.
-
-#### Binary variables and dichotomization
-
-One particular kind of non-normality happens when the outcome variable in the model is binary.  
-
-Let's say that we are interested in understanding whether there is a relationship in the NHANES data between how many hours of TV a person watches per day and whether they are overweight (which is defined as a BMI greater than 25).  First let's plot the raw relationship between TV watching and BMI.
-
-```{r}
-NHANES$isChild <- NHANES$Age<18
-NHANES_adult=subset(NHANES,subset=!isChild & BMI!='NA' & TVHrsDay!='NA')
-NHANES_adult$TVHrsDayNum = dplyr::recode(as.character(NHANES_adult$TVHrsDay), 
-                                      '0_hrs' = 0, '0_to_1_hr' = 0.5,
-                                      '1_hr'=1,'2_hr'=2,'3_hr'=3,'4_hr'=4,'More_4_hr'=5)
-# we need to recode the TV data into numbers
-ggplot(NHANES_adult,aes(x=TVHrsDayNum,y=BMI)) +
-  geom_point() + geom_smooth(method='lm')
-print(summary(lm(BMI~TVHrsDayNum,data=NHANES_adult)))
-```
-
-In the full sample, there is a relationship such that every hour of TV watching per dat is associated with roughly 0.71 increase in BMI. But let's say that instead of having the BMI data, all we had was a binary measure of whether the individual was overweight or not.
-
-```{r}
-NHANES_adult$Overweight=NHANES_adult$BMI>25
-print(summary(lm(Overweight~TVHrsDayNum,data=NHANES_adult)))
-
-
-```
-
-Here we see that every hour of TV watching was associated with an increase of .03 in the likelihood of being overweight.
-
-Let's sample repeatedly and compare these two models. This is a fairly small effect so we need a pretty large sample size to find it at all - we will start with 250 subjects per sample.
-
-```{r}
-nRuns=5000
-outputDf=data.frame(model=array(NA,nRuns*2),pval=array(NA,nRuns*2))
-sampSize=250
-
-randomize_x=FALSE
-
-for (i in seq(1,nRuns*2,2)){
-  NHANES_sample=sample_n(NHANES_adult,sampSize)
-  if (randomize_x==TRUE){
-    NHANES_sample$TVHrsDayNum=sample(NHANES_sample$TVHrsDayNum)
-  }
-  s1=summary(lm(BMI~TVHrsDayNum,data=NHANES_sample))
-  outputDf[i,1]='BMI'
-  outputDf[i,2]=s1$coefficients[2,4]
+makeSoyData = function(effectSize){
+  soyDf=data.frame(soy=c(rep(TRUE,24),rep(FALSE,24)),
+                     quartet=kronecker(seq(12),rep(1,4)))
+  # create the data for cups per week of soy milk
+  quartetSoyOzWeek=ceiling(round(rnorm(12)*12 + 20))
+  # set any negative numbers to zero
+  quartetSoyOzWeek = ifelse(quartetSoyOzWeek<0,0,quartetSoyOzWeek)
   
-  s2=summary(lm(Overweight~TVHrsDayNum,data=NHANES_sample))
-  outputDf[i+1,1]='Overweight'
-  outputDf[i+1,2]=s2$coefficients[2,4]
+  quartetHeight=ceiling(round(rnorm(12)*10 + 50))
+  
+  #create the soy variable for each individual, and a z-scored version of it
+  soyDf = soyDf %>% 
+    mutate(soyOzWeekTwins = kronecker(quartetSoyOzWeek,rep(1,4))) %>%
+    mutate(zSoyOzWeekTwins = (soyOzWeekTwins - mean(soyOzWeekTwins))/sd(soyOzWeekTwins))
+
+  soyDf = soyDf %>% 
+    mutate(heightTwins=kronecker(quartetHeight,rep(1,4)) + soyOzWeekTwins*effectSize + rnorm(nrow(soyDf))*2)
+
+  # fit model to twin data to get residual variance, so we can match to non-twins
+  lmResult=lm(heightTwins ~ soyOzWeekTwins,data=soyDf)
+  soyDf = soyDf %>% 
+    mutate(soyOzWeek = sample(soyOzWeekTwins)) %>%
+    mutate(height = lmResult$coefficients[1] + soyOzWeek*effectSize + rnorm(nrow(soyDf))*sd(lmResult$residuals))
+  return(soyDf)
+
+}
+soyDf=makeSoyData(0)
+ggplot(soyDf,aes(x=soyOzWeekTwins,y=heightTwins)) + 
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+ggplot(soyDf,aes(x=soyOzWeek,y=height)) + 
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+
+```
+
+Let's plot the residuals from the linear model for the twin data:
+
+```{r}
+lmResult = lm(heightTwins ~ soyOzWeekTwins,data=soyDf)
+lmResultIID = lm(height ~ soyOzWeek,data=soyDf)
+
+summary(lmResult)
+soyDf = soyDf %>% 
+  mutate(lmResidualTwins = lmResult$residuals,
+         lmResidual = lmResultIID$residuals)
+
+ggplot(soyDf,aes(x=soyOzWeekTwins,y=lmResidualTwins)) + 
+  geom_point() +
+  geom_hline(yintercept = 0,color='blue')
+ggplot(soyDf,aes(x=soyOzWeekTwins,y=lmResidual)) + 
+  geom_point() +
+  geom_hline(yintercept = 0,color='blue')
+
+
+```
+
+Now let's look at the effects of this factor on our analysis.  First, we will create datasets with no signal and look at the prevalence of type I errors.
+
+```{r}
+testTwins = function(){
+  soyDf=makeSoyData(0)
+  lmResult = lm(heightTwins ~ soyOzWeekTwins,data=soyDf)
+  return(summary(lmResult)$coefficients[2,])
+}
+
+nullTwinResults = replicate(2500,testTwins())
+
+# check for the proportion of false positive errors
+
+falsePosRateTwins = mean(nullTwinResults[4,]<0.05)
+falsePosRateTwins
+
+testUnrelated = function(){
+  soyDf=makeSoyData(0)
+  lmResult = lm(height ~ soyOzWeek,data=soyDf)
+  return(summary(lmResult)$coefficients[2,])
+}
+
+nullUnrelatedResults = replicate(2500,testUnrelated())
+
+# check for the proportion of false positive errors
+
+falsePosRateUnrelated = mean(nullUnrelatedResults[4,]<0.05)
+falsePosRateUnrelated
+
+```
+
+Now let's do the same thing with actual signal, and see how this affects our ability to detect a difference when it exists (that is, our *power*).
+```{r}
+testTwins = function(){
+  soyDf=makeSoyData(0.5)
+  lmResult = lm(heightTwins ~ soyOzWeekTwins,data=soyDf)
+  return(summary(lmResult)$coefficients[2,])
+}
+
+posTwinResults = replicate(2500,testTwins())
+
+# check for the proportion of false positive errors
+
+powerTwins = mean(posTwinResults[,4]<0.05)
+powerTwins
+betaEstTwins=mean(posTwinResults[,1])
+betaEstTwins
+
+testUnrelated = function(){
+  soyDf=makeSoyData(0.5)
+  lmResult = lm(height ~ soyOzWeek,data=soyDf)
+  return(summary(lmResult)$coefficients[2,])
+}
+
+posUnrelatedResults = replicate(2500,testUnrelated())
+
+# check for the proportion of false positive errors
+
+powerUnrelated = mean(posUnrelatedResults[,4]<0.05)
+powerUnrelated
+
+```
+
+### Crossvalidation
+
+
+One of our goals in statistics and machine learning is to able to make predictions about new data given some existing dataset.  We have already seen (in Session 5) how a more complex model will always fit our specific dataset better, but will often cause the model to do a worse job making predictions about new datasets.  In this tutorial you will see how we can use a concept from machine learning called "cross-validation" to determine how well our model would fit on new data, even when we only have one dataset.
+
+Let's say that we want to predict height from age in the NHANES dataset for children between the ages 5 and 18.  First let's set up our dataset. We will sample 100 children from the full dataset for this analysis. We will create a model that includes Age and Gender.
+
+```{r}
+library(NHANES)
+library(dplyr)
+library(ggplot2)
+
+
+set.seed(123456789)
+sampleSize=50
+NHANES_sample = NHANES %>%
+  unique() %>% 
+  filter(Age>4 & Age<19 & !is.na(Height) & !is.na(Gender)) %>%
+  select(Age,Height,Gender) %>%
+  sample_n(sampleSize)
+  
+ggplot(NHANES_sample,aes(Age,Height)) + 
+  geom_point() + 
+  geom_smooth(method='lm',se=FALSE)
+```
+
+We can fit a model to the full dataset, using the lm() function. Let's start with a simple linear model:
+
+```{r}
+lmResultLinear = lm(Height ~ Age + Gender,data=NHANES_sample)
+summary(lmResultLinear)
+```
+
+The important thing we see here is that there is a strong effect of Age on Height.  One way that we can quantify how well the model fits is by using the Pearson's correlation coefficient (which you learned about in Session 18) to see how similar the actual data are to the model's predicted values (which are saved in the fitted.values variable).  This is computed using the cor() function.  We can also compute the root mean squared error comparing predicted and actual values.
+
+```{r}
+
+MSElinear = mean((NHANES_sample$Height -lmResultLinear$fitted.values)**2)
+MSElinear
+```
+
+What happens now if we take a many new samples from NHANES and try to predict Height of those individuals using the same model?
+
+```{r}
+sampleFit = function(){
+  NHANES_sample2 =NHANES %>%
+    unique() %>% 
+    filter(Age>4 & Age<19 & !is.na(Height) & !is.na(Gender)) %>%
+    select(Age,Height,Gender) %>%
+    sample_n(sampleSize)
+  mse=mean((NHANES_sample2$Height -predict(lmResultLinear,newdata=NHANES_sample2))**2)
+}
+
+MSElinearNew = replicate(100,sampleFit())
+mean(MSElinearNew)
+```
+
+Here we see that the model still predicts height well, but slightly less well than it did for the data that the model was fitted to.
+
+We would like to be able to determine how well the model will fit with new data (which we also refer to as "generalization"), so that we can know how much faith to have in our predictions, even if we don't have a whole new dataset to test it on, like we had above.  We can use the concept of cross-validation to do this.
+
+In cross-validation, we split our dataset into two parts that we call a "training set" (which is used to fit or "train" the model) and a "testing set" (which is used to to test or validate the model). We do this repeatedly so that each data point will end up in one testing set.  A simple version of this is called "leave one out" cross-validation, which works like it sounds: We march through all of the observations,in each case leaving out one observation and then using the model fitted with the remaining data to predict the outcome for the left-out ("test") observation.  Let's see how that would work for our sample.
+
+```{r}
+# add an index that we can use to loop over
+NHANES_sample = NHANES_sample %>% 
+  mutate(ID = seq(1:sampleSize),
+         predictedLOO=NA)
+
+# create a function that runs the model on the training data and returns the predicted value
+cvPredict = function(testDf,dataDf){
+  trainDf = dataDf %>% filter(ID != testDf$ID)
+  model = lm(Height ~ Age + Gender ,data=trainDf)
+  testDf$predictedLOO = predict(model,newdata=testDf)
+  return(testDf)
+}
+
+cvPredictions = NHANES_sample %>% 
+  group_by(ID) %>%
+  do(cvPredict(.,NHANES_sample))
+
+MSEloo = mean((cvPredictions$Height-cvPredictions$predictedLOO)**2)
+MSEloo
+```
+
+
+This shows that our model does a good job of predicting height from age and gender, even on individuals who were not included in the fitting of the model. In fact, it only does a tiny bit worse than it did on the original data. 
+
+### Model selection using cross validation
+
+One of the ways that we can use cross validation is to determine the right model.  Remember from before that a more complex model will always fit the data better, because it can adapt to the specific data points. This will improve the fit to the specific dataset, but will actually make the model *worse* at generalization, because it will be *overfitted* to the original dataset.  Cross-validation provides a way to prevent this.
+
+Let's say that we have a dataset and we don't know what the right model is; it could be linear, quadratic, or cubic.  Let's generate some data with each of these patterns.
+
+```{r}
+# show linear, quadratic, and cubic fits to a dataset
+nPoints=20
+noiseSD=3
+cubicPts= sin(seq(0,2*pi,length.out=nPoints))
+dataDf = data.frame(x=runif(nPoints)*20) %>% 
+  mutate(x=x-mean(x)) %>%
+  arrange(x) %>%
+  mutate(linear = x*0.5 + rnorm(nPoints)*noiseSD) %>%
+  mutate(quadratic = (x**2)*-0.5 + rnorm(nPoints)*noiseSD) %>%
+  mutate(cubic = cubicPts  + rnorm(nPoints)*0.1) 
+
+library(cowplot)
+
+p1=ggplot(dataDf,aes(x,linear)) + geom_point()
+p2=ggplot(dataDf,aes(x,quadratic)) + geom_point()
+p3=ggplot(dataDf,aes(x,cubic)) + geom_point()
+plot_grid(p1,p2,p3)
+```
+
+Now let's fit all three models to each dataset. We can do this using the poly() function in R, which will generate a polynomial of a given order.  The models look like this:
+
+Linear (model order 1):
+
+\[
+y = x*\beta_1 + intercept
+\]
+]
+
+Quadratic (model order 2):
+
+\[
+y = x*\beta_1 + x^2*\beta_2 + intercept
+\]
+]
+
+Cubic (model order 3):
+
+\[
+y = x*\beta_1 + x^2*\beta_2 + x^3*\beta_3  + intercept
+\]
+]
+
+Let's fit them all using lm() - see https://www.r-bloggers.com/fitting-polynomial-regression-in-r/ for more on this:
+
+```{r}
+
+fitModel = function(modelDf,dataDf){
+  modelFit = lm(sprintf('%s ~ poly(x,%d)',modelDf$data,modelDf$modelOrder),data=dataDf)
+  modelDf$MSE = mean(modelFit$residuals**2)
+  return(modelDf)
+}
+
+modelDf = expand.grid(data=c('linear','quadratic','cubic'),modelOrder=seq(1,3))
+modelDf = modelDf %>% group_by(data,modelOrder) %>% do(fitModel(.,dataDf))
+modelDf
+
+p1=ggplot(modelDf %>% filter(data=='linear'),aes(modelOrder,MSE)) + 
+  geom_line() + 
+  ggtitle('Linear data')
+p2=ggplot(modelDf %>% filter(data=='quadratic'),aes(modelOrder,MSE)) + 
+  geom_line() +
+  ggtitle('Quadratic data')
+p3=ggplot(modelDf %>% filter(data=='cubic'),aes(modelOrder,MSE)) + 
+  geom_line() +
+  ggtitle('Cubic data')
+
+plot_grid(p1,p2,p3)
+
+```
+
+As we saw in Lecture 5, the error is always lower for the more complex model, regardless of whether it's actually the right model or not. Let's look at the linear data to see what is going on:
+
+```{r}
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) 
+
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') 
+
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') 
+
+ggplot(dataDf,aes(x,linear)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') + 
+  geom_smooth(method=lm,formula='y ~ poly(x,8)',se=FALSE,color='orange') 
+
+
+ggplot(dataDf,aes(x,quadratic)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') 
+
+ggplot(dataDf,aes(x,cubic)) + 
+  geom_point() +
+  geom_smooth(method=lm,formula='y ~ poly(x,1)',se=FALSE) +
+  geom_smooth(method=lm,formula='y ~ poly(x,2)',se=FALSE,color='red') +
+  geom_smooth(method=lm,formula='y ~ poly(x,3)',se=FALSE,color='green') 
+
+```
+
+We see that the higher order models are fitting the noise rather than the signal in the dataset for the datasets where there is no nonlinear signal present.  Conversely, the linear model *underfits* on the data with the quadratic and cubic signal.
+
+How can we decide which model is actually the right one?  Cross-validation gives us a way to do this.  Instead of deciding based on how well the model fits to the data that it was created with, we instead fit the model to part of the data but then test it on a different part. To keep things simple we will use our leave-one-out procedure that we discussed above; this is usually not the best way to perform crossvalidation, but it's perfectly legitimate.
+
+First let's setup a simple version, and then we will apply it to the data created above.
+
+```{r}
+cvDf = data.frame(x=seq(-4,4,1)) %>% 
+  mutate(y=x*0.5 + rnorm(9)*0.5) 
+cvDf = cvDf %>% 
+  mutate(ID=seq(1,9)) %>%
+  mutate(prediction=NA,slope=NA,intercept=NA)
+
+ggplot(cvDf,aes(x,y)) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE)
+cvDf
+
+```
+
+To perform cross validation on this dataset, we take each datapoint and fit the model using the remainder of the data points, and then use the model to make a prediction for the left-out data point. 
+
+```{r}
+
+cvDf = cvDf
+for (i in 1:nrow(cvDf)) {
+  # set up training and test data frames
+  trainingDf=cvDf %>% filter(ID != i)
+  testDf = cvDf %>% filter(ID == i)
+   # fit model to training data
+  lmResult = lm(y ~ x, data=trainingDf)
+  cvDf$prediction[i] = predict(lmResult,newdata=testDf)
+  cvDf$intercept[i] = lmResult$coefficients[1]
+  cvDf$slope[i] = lmResult$coefficients[2]
+  
   
 }
 ```
 
-```{r}
-outputDf$model=as.factor(outputDf$model)
-outputDf$sig=outputDf$pval<0.05
-resultsDf=outputDf %>% group_by(model) %>% 
-    summarise(Power=mean(sig)) 
-print(resultsDf[order(resultsDf$Power,decreasing=TRUE),])
-
-```
-
-Here we see that our ability to detect the effect in the dichotomized data is substantially smaller than it is in the raw BMI data. This is perhaps not surprising, given that we threw away a lot of information when we dichotomized.  But it nonetheless serves as a good demonstration of the general point that dichotomizing data is almost never a good idea.
-
-#### Multicollinearity
-
-So far we have focused primarily on models where there is only one predictor variable, but it's often the case that there are multiple variables that may be relevant to some outcome.  When this happens, the results from our standard models can be highly misleading.
-
-To demonstrate this most clearly, let's generate some simulated data.  Our outcome will be household income, and our two predictors will be IQ and parents' income.  We will use a function that generates a set of random normal variates with a given correlation.
-
-```{r}
-generateIncomeData = function(n,mu=c(100,100),sdev=c(10,10),
-                              regcorr=0,betas=c(1,1),noiseSD=10){
-  
-  # we need to scale the betas since the standard deviations of the 
-  # variables are very different
-  cc=matrix(c(1,regcorr,regcorr,1),2,2)
-  Sigma=cor2cov(cc,sdev)
-  d=as.data.frame(mvrnorm(n = n,mu,Sigma))
-  names(d)=c('IQ','ParentsIncome')
-  # here we use matrix multiplication to generate the data
-  d$Income=as.vector(mu[2] + as.matrix(d)%*%betas + rnorm(dim(d)[1])*noiseSD)
-  return(d)
+Make figures for lecture
+```{r fig.width=6, fig.height=6}
+for (i in 1:nrow(cvDf)) {
+  ggplot(cvDf,aes(x,y)) + 
+    geom_point() +
+    annotate('point',x=cvDf$x[i],y=cvDf$y[i],color='red',size=3) + 
+    geom_abline(slope=cvDf$slope[i],intercept=cvDf$intercept[i],color='blue') +
+    xlim(-4.5,4.5) + ylim(-4.5,4.5) + 
+    annotate('point',x=cvDf$x[i],y=cvDf$prediction[i],color='green',size=3)
+  ggsave(sprintf('cv_demo/point%d.png',i),width=6,height=6)
 }
-d=generateIncomeData(n=1000,regcorr=0.8)
-cor(d)
-a=ggplot(d,aes(x=IQ,y=Income))+geom_point()
-b=ggplot(d,aes(x=ParentsIncome,y=Income))+geom_point()
-plot_grid(a,b)
+ggplot(cvDf,aes(y,prediction)) + 
+  geom_point(size=3) + 
+  xlim(-2,2) + ylim(-2,2) + 
+  geom_abline(slope=1,intercept=0) + 
+  xlab('observed y') + ylab('predicted y') + 
+  theme(axis.text=element_text(size=12), axis.title=element_text(size=18,face="bold"))
+
+lmResultFullData = lm(y~x, cvDf)
+fullDataRMSE = sqrt(mean(lmResultFullData$residuals**2))
+fullDataRMSE
+
+cvDf = cvDf %>% mutate(predictionResidual = prediction - y)
+predictionRMSE = sqrt(mean(cvDf$predictionResidual**2))
+predictionRMSE
 ```
 
-Now let's look what happens if we estimate the model using our standard approach. First, we estimate it in the case where IQ and Parent's Income are weakly correlated. Let's do this repeatedly and look at the power and the variability of the parameter estimates.
+Take 100 samples from the same generating model and look at the fit of the model to the new data.
 
 ```{r}
-nRuns=1000
-outputDf=data.frame(param=array(NA,nRuns*4),
-                    corr=array(NA,nRuns*4),
-                    pval=array(NA,nRuns*4),
-                    betaEst=array(NA,nRuns*4))
-
-corrs=c(0.2,0.9)
-betas=c(0.3,0.3)
-for (i in seq(1,(nRuns-1)*4,4)){
-  dfLowCorr=generateIncomeData(n=128,regcorr=corrs[1],betas=betas)
-  s=summary(lm(Income ~ IQ + ParentsIncome,data=dfLowCorr))
-  outputDf[i,1]='IQ'
-  outputDf[i+1,1]='ParentsIncome'
-  outputDf[i:(i+1),2]=corrs[1]
-  outputDf[i,3:4]=c(s$coefficients[2,4],s$coefficients[2,1])
-  outputDf[i+1,3:4]=c(s$coefficients[3,4],s$coefficients[3,1])
-  dfHiCorr=generateIncomeData(n=128,regcorr=corrs[2],betas=betas)
-  s=summary(lm(Income ~ IQ + ParentsIncome,data=dfHiCorr))
-  outputDf[i+2,1]='IQ'
-  outputDf[i+3,1]='ParentsIncome'
-  outputDf[(i+2):(i+3),2]=corrs[2]
-   outputDf[i+2,3:4]=c(s$coefficients[2,4],s$coefficients[2,1])
-  outputDf[i+3,3:4]=c(s$coefficients[3,4],s$coefficients[3,1])
+testNewSample = function(lmResult){
+  cvDfNew = data.frame(x=seq(-4,4,1)) %>% 
+    mutate(y=x*0.5 + rnorm(9)*0.5) 
+pred=predict(lmResult,cvDfNew)
+cvDfNew = cvDfNew %>% mutate(predictionError=pred-y)
+return(sqrt(mean(cvDfNew$predictionError**2)))
 }
 
-outputDf$sig=outputDf$pval<0.05
-resultsDf=outputDf %>% group_by(param,corr) %>% 
-    summarise(Power=mean(sig),MeanBeta=mean(betaEst),SdBeta=sd(betaEst)) 
-print(resultsDf)
-
+newSampleRMSE=replicate(100,testNewSample(lmResultFullData))
+mean(newSampleRMSE)
 ```
 
-Let's plot a histogram of the parameter estimates across runs.
+
+Now we apply it to the data from above.
 
 ```{r}
-ggplot(subset(outputDf,param='IQ') %>% drop_na(),aes(betaEst,color=as.factor(corr))) + geom_freqpoly(bins=50,size=1) +
-  xlab('IQ parameter estimates')
+cvPredict2 = function(testDf,dataDf,modelOrder,datatype){
+
+  trainDf = dataDf %>% filter(ID != testDf$ID)
+  model = lm(sprintf('%s ~ poly(x,%d)',datatype,modelOrder),data=trainDf)
+  testDf$predictedLOO = predict(model,newdata=testDf)
+  return(testDf)
+}
+
+
+fitModelLOO = function(modelDf,dataDf){
+  dataDf=dataDf %>% mutate(ID=seq(1,nrow(dataDf)))
+  cvOutput = dataDf %>% group_by(ID) %>% do(cvPredict2(.,dataDf,modelDf$modelOrder,modelDf$data))
+  modelDf$MSEloo = mean((cvOutput$predictedLOO - cvOutput[,as.character(modelDf[1,]$data)])**2)
+  return(modelDf)
+}
+
+outputLOO = modelDf %>% group_by(data,modelOrder) %>% do(fitModelLOO(.,dataDf))
 ```
 
+Let's plot the results to see how it turned out:
+
+```{r}
+minMSE = outputLOO %>% group_by(data) %>% summarize(minMSE=min(MSEloo),bestModelOrder=which(MSEloo==min(MSEloo)))
+p1=ggplot(outputLOO %>% filter(data=='linear'),aes(modelOrder,MSEloo)) + 
+  geom_line() + 
+  ggtitle('Linear data (order=1)') +
+  annotate('point',x=minMSE$bestModelOrder[1],y=minMSE$minMSE[1],color='blue')
+
+p2=ggplot(outputLOO %>% filter(data=='quadratic'),aes(modelOrder,MSEloo)) + 
+  geom_line() +
+  ggtitle('Quadratic data (order=2)') +
+  annotate('point',x=minMSE$bestModelOrder[2],y=minMSE$minMSE[2],color='blue')
+
+p3=ggplot(outputLOO %>% filter(data=='cubic'),aes(modelOrder,MSEloo)) + 
+  geom_line() +
+  ggtitle('Cubic data (order=3)') + 
+  annotate('point',x=minMSE$bestModelOrder[3],y=minMSE$minMSE[3],color='blue')
+
+
+plot_grid(p1,p2,p3)
+
+```
+We see that in each case, the MSE for the held-out data was lowest for the model that was properly matched to the data.
