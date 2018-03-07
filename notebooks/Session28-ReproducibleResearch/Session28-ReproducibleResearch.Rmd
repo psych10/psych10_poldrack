@@ -1,0 +1,124 @@
+---
+title: "Session 28 - Reproducibility"
+output:
+  html_document:
+    df_print: paged
+---
+
+#### Power and false discoveries
+
+Let's look at the relationship between statistical power and false discoveries, as outlined in Ioannidis' 2005 paper.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+alpha=0.05  # false positive rate
+beta = seq(1.,0.05,-0.05)  # false negative rate
+powerVals = 1-beta
+priorVals=c(.01,0.1,0.5,0.9)
+
+nstudies=100
+
+df=data.frame(power=rep(powerVals,length(priorVals))) %>%
+  mutate(priorVal=kronecker(priorVals,rep(1,length(powerVals))),
+         alpha=alpha)
+
+
+# Positive Predictive Value (PPV) - the likelihood that a positive finding is true
+PPV = function(df) {
+  df$PPV = (df$power*df$priorVal)/(df$power*df$priorVal + df$alpha*(1-df$priorVal))
+  return(df)
+}
+
+df=PPV(df)
+ggplot(df,aes(power,PPV,color=as.factor(priorVal))) + 
+  geom_line(size=1) + 
+  ylim(0,1) +
+  xlim(0,1) +
+  ylab('Posterior predictive value (PPV)')
+
+```
+
+### The winner's curse
+
+```{r}
+set.seed(123456)
+
+trueEffectSize=0.2
+dfCurse=data.frame(sampSize=seq(20,300,20)) %>%
+  mutate(effectSize=trueEffectSize,
+         alpha=0.05)
+
+simCurse = function(df,nruns=1000){
+  sigResults=0
+  sigEffects=c()
+  for (i in 1:nruns){
+    tmpData=rnorm(df$sampSize,mean=df$effectSize,sd=1)
+    ttestResult=t.test(tmpData)
+    if (ttestResult$p.value<df$alpha){
+      sigResults = sigResults + 1
+      sigEffects=c(sigEffects,ttestResult$estimate)
+    }
+  }
+  df$power=sigResults/nruns
+  df$effectSizeEstimate=mean(sigEffects)
+  return(df)
+}
+
+dfCurse = dfCurse %>% group_by(sampSize) %>% do(simCurse(.))
+
+ggplot(dfCurse,aes(power,effectSizeEstimate)) +
+  geom_line(size=1) +
+  ylim(0,max(dfCurse$effectSizeEstimate)*1.2) +
+  geom_hline(yintercept = trueEffectSize,size=1,linetype='dotted',color='red')
+```
+
+Let's look more closely at an example:
+
+```{r}
+set.seed(123456)
+sampSize=60
+effectSize=0.2
+nruns=1000
+alpha=0.05
+df=data.frame(idx=seq(1,nruns)) %>%
+  mutate(pval=NA,
+         estimate=NA)
+
+for (i in 1:nruns){
+  tmpData=rnorm(sampSize,mean=effectSize,sd=1)
+  ttestResult=t.test(tmpData)
+  df$pval[i]=ttestResult$p.value
+  df$estimate[i]=ttestResult$estimate
+}
+df = df %>%
+  mutate(significant=pval<alpha) %>%
+  group_by(significant)
+
+power=mean(df$pval<alpha)
+power
+
+meanSigEffect=mean(df$estimate[df$pval<alpha])
+meanSigEffect
+
+meanTrueEffect=mean(df$estimate)
+meanTrueEffect
+
+ggplot(df,aes(estimate,fill=significant)) + 
+  geom_histogram(bins=50)
+
+```
+
+
+#### Ebay example
+
+```{r}
+ebayData=read.csv('ebay_shoes.csv',header=FALSE)
+ebayData$idx=seq(1,nrow(ebayData))
+ggplot(ebayData,aes(V1))+ 
+  geom_histogram() +
+  xlab('Bid ($)')
+
+```
+
