@@ -1,0 +1,308 @@
+---
+title: 'Session 23: Continuous relationships'
+output:
+  html_document:
+    df_print: paged
+---
+
+#### An example of correlation/regression analysis
+
+This example is based on https://fivethirtyeight.com/features/higher-rates-of-hate-crimes-are-tied-to-income-inequality/ which discussed the relationship between the prevalence of hate crimes and income inequality in the wake of the 2016 Presidential election.  The data from the article are available from the "fivethiryeight" R package, which you will need to install if you want to run this notebook.  You will also need to install the 'reldist' package.
+
+```{r}
+library(fivethirtyeight)
+library(ggplot2)
+library(dplyr)
+library(BayesianFirstAid)
+set.seed(123456)
+```
+
+The hate_crimes data frame includes data from each state, with two variables specific to hate crimes:
+
+Header | Definition
+---|---------
+`state` | State name
+`median_household_income` | Median household income, 2016
+`share_unemployed_seasonal` | Share of the population that is unemployed (seasonally adjusted), Sept. 2016
+`share_population_in_metro_areas` | Share of the population that lives in metropolitan areas, 2015
+`share_population_with_high_school_degree` | Share of adults 25 and older with a high-school degree, 2009
+`share_non_citizen` | Share of the population that are not U.S. citizens, 2015
+`share_white_poverty` | Share of white residents who are living in poverty, 2015
+`gini_index` | Gini Index, 2015
+`share_non_white` | Share of the population that is not white, 2015
+`share_voters_voted_trump` | Share of 2016 U.S. presidential voters who voted for Donald Trump
+`hate_crimes_per_100k_splc` | Hate crimes per 100,000 population, Southern Poverty Law Center, Nov. 9-18, 2016
+`avg_hatecrimes_per_100k_fbi` | Average annual hate crimes per 100,000 population, FBI, 2010-2015
+
+The analysis reported in the story focused on the relationship between income inequality (defined by the Gini index) and the prevalence of hate crimes in each state.  
+
+#### Quantifying inequality
+
+How does the Gini index quantify inequality? The Gini index is usually defined in terms of a curve that describnes the relation between income and the proportion of the population that has income at or less than that level, known as a *Lorenz curve*.  However, another way to think of it is more intuitive: It is the relative mean absolute difference between incomes, divided by two (from https://en.wikipedia.org/wiki/Gini_coefficient):
+
+\[
+G = \frac{\displaystyle{\sum_{i=1}^n \sum_{j=1}^n \left| x_i - x_j \right|}}{\displaystyle{2n\sum_{i=1}^n x_i}} 
+\]
+
+First, let's create an example with 10 people where everyone has exactly the same income.
+
+```{r}
+# function to generate a plot of Lorenz curve and compute Gini coefficient
+lorenzCurve = function(df){
+  df = df %>% arrange(income)
+  sumIncome=sum(df$income)
+  lc=array(NA,nrow(df)+1)
+  p=array(NA,nrow(df)+1)
+  lc[1]=0
+  p[1]=0
+  for (i in 1:nrow(df)){
+    lc[i+1]=sum(df$income[1:i])/sumIncome
+    p[i+1]=i/nrow(df)
+  }
+  S=sum(lc)
+  giniCoef=1 + (1-2*S)/nrow(df)
+
+  p=ggplot(data.frame(p,lc),aes(p,lc)) + 
+    geom_line(color='blue') + 
+    geom_point() + 
+    xlim(0,1) + ylim(0,1) + 
+    xlab('proportion of population') + ylab('proportion of income') +
+    geom_abline(slope=1,intercept = 0,color='black',linetype='dotted') +
+    ggtitle(sprintf('Gini coefficient = %f',giniCoef))
+  print(p)
+  return(giniCoef)
+}
+
+incomeDf=data.frame(income=rep(40000,10))
+lorenzCurve(incomeDf)
+```
+Now let's look at an example where income is normally distributed.
+
+```{r}
+incomeDf=data.frame(income=rnorm(10,mean=40000,sd=5000))
+
+
+lorenzCurve(incomeDf)
+
+```
+
+Now let's look at an example with high inequality; everyone has equal income ($40,000) except for one person, who has income of $40,000,000.
+
+```{r}
+incomeDf=data.frame(income=rnorm(10,mean=40000,sd=5000))
+incomeDf$income[1]=40000000
+
+lorenzCurve(incomeDf)
+
+```
+
+#### The relation between inequality and hate crimes
+
+```{r}
+hateCrimes = hate_crimes %>%
+  mutate(state_abb = state.abb[match(state,state.name)]) %>%
+  filter(!is.na(avg_hatecrimes_per_100k_fbi))
+
+hateCrimes$state_abb[hateCrimes$state=="District of Columbia"]='DC'
+
+corGiniHC=cor(hateCrimes$gini_index,hateCrimes$avg_hatecrimes_per_100k_fbi)
+ggplot(hateCrimes,aes(gini_index,avg_hatecrimes_per_100k_fbi,label=state_abb)) +
+  geom_point() + geom_text(aes(label=state_abb),hjust=0, vjust=0) +
+  ggtitle(sprintf('r = %0.2f',corGiniHC)) +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+  
+cor.test(hateCrimes$avg_hatecrimes_per_100k_fbi,hateCrimes$gini_index)
+
+spearmanR=cor(hateCrimes$gini_index,hateCrimes$avg_hatecrimes_per_100k_fbi,
+              method='spearman')
+ggplot(hateCrimes,aes(gini_index,avg_hatecrimes_per_100k_fbi,label=state_abb)) +
+  geom_point() + geom_text(aes(label=state_abb),hjust=0, vjust=0) +
+  ggtitle(sprintf('Spearman rank r = %0.2f',spearmanR)) +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+
+```
+
+### Covariance
+
+We want to quantify the relationship between these two variables. Let's first look at how we can compute the covariance.  Remember that variance for a single variable is computed as:
+
+$$
+\[
+s^2 = \frac{\sum_{i=1}^n (x_i - \bar{x})^2}{N - 1}
+\]
+$$
+
+This tell us how far each observation is from the mean.  Covariance tells us whether there is a relation between the deviations of two different variables across observations.  It is defined as:
+$$
+\[
+covariance = \frac{\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y})}{N - 1}
+\]
+$$
+
+This value will be high when x and y are both highly deviant; if they are deviant in the same direction then the covariance is positive, whereas if they are deviant in opposite directions the covariance is negative.  Let's look at a toy example first.
+
+```{r}
+df=data.frame(x=c(3,5,8,10,12)) %>%
+  mutate(y=x+round(rnorm(5,sd=2))) %>%
+  mutate(y_dev=y-mean(y),
+         x_dev=x-mean(x)) %>%
+  mutate(crossproduct=y_dev*x_dev)
+
+df
+sum(df$crossproduct)
+covXY = sum(df$crossproduct)/(nrow(df)-1)
+covXY
+cov(df$x,df$y)
+
+```
+
+The correlation is computed by scaling the covariance by the standard deviations of the two variables:
+
+\[
+r = \frac{covariance}{s_xs_y} = \frac{\sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y})}{(N - 1)s_x s_y}
+\]
+
+```{r}
+corXY = sum(df$crossproduct)/((nrow(df)-1)*sd(df$x)*sd(df$y))
+corXY
+sd(df$x)
+sd(df$y)
+cor(df$x,df$y)
+```
+
+Create some examples of data with varying levels of correlation
+
+```{r}
+mk_cor_figure = function(r,n=10) {
+  
+  df=data.frame(x=rnorm(n)) %>%
+    mutate(y=r*x+(rnorm(n)))
+  p=ggplot(df,aes(x,y))+
+    geom_point() +
+    ggtitle(sprintf('r = %0.2f',cor(df$x,df$y))) +
+    geom_smooth(method='lm',se=FALSE) + 
+    theme(plot.title = element_text(size = 20, face = "bold"))
+  print(p)
+}
+
+mk_cor_figure(-1)
+```
+
+#### Significance testing for correlations
+
+First let's use the standard t approximation.
+
+```{r}
+cor.test(hateCrimes$avg_hatecrimes_per_100k_fbi,
+         hateCrimes$gini_index,
+         alternative = 'greater')
+
+```
+
+Then let's use randomization.
+
+```{r}
+shuffleCorr=function(x,y){
+  xShuffled=sample(x)
+  return(cor(xShuffled,y))
+}
+
+shuffleDist=replicate(2500,shuffleCorr(hateCrimes$avg_hatecrimes_per_100k_fbi,hateCrimes$gini_index))
+
+ggplot(data.frame(shuffleDist),aes(shuffleDist)) + 
+  geom_histogram(bins=100) +
+  geom_vline(xintercept = corGiniHC,color='blue') +
+  ggtitle(sprintf('p(shuffled r >= observed) = %0.3f',mean(shuffleDist>=corGiniHC))) +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+
+```
+
+We can also perform Bayesian estimation using the bayes.cor.test() function from the BayesianFirstAid package.
+
+```{r}
+bayesCor = bayes.cor.test(hateCrimes$avg_hatecrimes_per_100k_fbi,
+         hateCrimes$gini_index)
+bayesCor
+plot(bayesCor)
+```
+
+#### Correlation and outliers
+
+Example of the sensitivity of correlation to outliers. Make some uncorrelated data, and then add 
+
+```{r}
+n=20
+set.seed(1234)
+dfOutlier=data.frame(x=rnorm(n)) %>%
+  mutate(y=rnorm(n))
+dfOutlier$x[1]=10
+dfOutlier$y[1]=10
+p=ggplot(dfOutlier,aes(x,y))+
+  geom_point() +
+  ggtitle(sprintf('r = %0.2f (without outlier: r = %.2f)',cor(dfOutlier$x,dfOutlier$y),cor(dfOutlier$x[2:n],dfOutlier$y[2:n]))) +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+print(p)
+
+cor(dfOutlier$x,dfOutlier$y,method='spearman')
+
+```
+
+Perform Spearman's correlation
+
+```{r}
+set.seed(123456)
+df=data.frame(x=round(rnorm(5,mean=10,sd=5))) %>%
+  mutate(y=round(rnorm(5,mean=10,sd=5))) 
+df$x[5]=50
+df$y[5]=50
+
+df$rankx=rank(df$x)
+df$ranky=rank(df$y)
+df = df %>% arrange(rankx)
+df
+cor(df$x,df$y)
+cor(df$x,df$y,method='spearman')
+
+ggplot(df,aes(x,y)) +
+  geom_point(size=3)
+```
+
+
+#### Causal inference
+
+This is a demonstration of how we can use causal inference algorithms to identify causal relations from observational data.
+
+```{r}
+betas=c(2,-1)
+noiseLevels=c(6,2)
+df=data.frame(studyTime=runif(48)*12) %>%
+  mutate(grade=60 + studyTime*betas[1]+rnorm(48)*noiseLevels[1],
+         finishTime=studyTime*betas[2]+rnorm(48)*noiseLevels[1])
+df$finishTime = df$finishTime - min(df$finishTime)+10
+df$grade[df$grade>100]=100
+df$grade[df$grade<0]=0
+
+ggplot(df,aes(studyTime,grade)) +
+  geom_point()
+ggplot(df,aes(studyTime,finishTime)) +
+  geom_point()
+```
+
+Use PC algorithm to identify causal structure.
+
+```{r}
+library(pcalg)
+pc.fit <- pc(suffStat = list(C = cor(df), n = nrow(df)),
+  indepTest = gaussCItest, ## indep.test: partial correlations
+  alpha=0.01, labels = colnames(df), verbose = TRUE,
+  solve.confl = TRUE)
+
+
+if (require(Rgraphviz)) {
+## show estimated CPDAG
+par(mfrow=c(1,2))
+plot(pc.fit, main = "Estimated CPDAG")
+#plot(gmG8$g, main = "True DAG")
+}
+```
+
