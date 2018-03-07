@@ -1,0 +1,218 @@
+---
+title: 'Session 24: General linear model'
+output:
+  html_document:
+    df_print: paged
+---
+
+In this notebook we will connect the ideas of correlation with the concept of linear regression.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+```
+
+
+Let's generate a simple dataset.
+
+```{r}
+set.seed(12345)
+betas=c(2,5)  # the number of points that having a prior class increases grades
+df=data.frame(studyTime=c(2,3,5,6,6,8,10,12),
+              priorClass=c(0,1,1,0,1,0,1,0)) %>%
+  mutate(grade=studyTime*betas[1]+priorClass*betas[2] +round(rnorm(8,mean=70,sd=5))) 
+df
+lmResult=lm(grade~studyTime,data=df)
+
+print(summary(lmResult))
+
+lmResultIntercept=lm(grade~1,data=df)
+anova(lmResult,lmResultIntercept)
+
+p=ggplot(df,aes(studyTime,grade)) +
+  geom_point(size=3) +
+  xlab('Study time (hours)') +
+  ylab('Grade (percent)') +
+  xlim(0,13) + 
+  ylim(70,100)
+
+print(p)
+ggsave('studyTimePlot.png')
+
+p2=p+geom_abline(slope=lmResult$coefficients[2],
+                  intercept=lmResult$coefficients[1],
+                  color='blue')
+
+print(p2)
+
+cor.test(df$studyTime,df$grade)
+
+p3=p2+geom_abline(slope=lmResult$coefficients[2],
+                  intercept=lmResult$coefficients[1],
+                  color='blue',linetype='dashed',size=1) +
+  annotate('point',x=0,y=lmResult$coefficients[1],color='red',size=4) +
+  annotate('segment',x=5,xend=10,color='blue',
+           y=predict(lmResult,newdata=data.frame(studyTime=5))[1],
+           yend=predict(lmResult,newdata=data.frame(studyTime=5))[1]) +
+   annotate('segment',x=10,xend=10,color='blue',
+           y=predict(lmResult,newdata=data.frame(studyTime=5))[1],
+           yend=predict(lmResult,newdata=data.frame(studyTime=10))[1])
+ 
+print(p3)
+predict(lmResult,newdata=data.frame(studyTime=5))[1] -predict(lmResult,newdata=data.frame(studyTime=10))[1]
+```
+
+Let's compute the regression slope directly from the data. Intuitively, we want to see whether deviations from the mean are related in the X and Y variables; that, when X is oddly large, is Y also oddly large, and vice versa?
+
+```{r}
+# first compute the sum of squared error from the mean
+df = df %>%
+  mutate(studyTimeResid=studyTime-mean(studyTime),
+         gradeResid=grade - mean(grade)) %>%
+  mutate(crossproduct=studyTimeResid*gradeResid)
+
+sum(df$crossproduct)
+sum(df$studyTimeResid**2)
+bHat = sum(df$crossproduct)/sum(df$studyTimeResid**2)
+
+df
+
+
+```
+
+
+#### More complex models
+
+Now let's examine a case where we have two independent variables.  Let's say that grades are actually a function of study time as well as prior experience with the topic of the course.  We will code prior experience using a 1 to denote that the individual has had a prior class in the topic, and a zero to indicate that they have not.  This is what we call "dummy coding".  Intuitively, the coefficient on this variable should indicate the effect of having had a prior class:
+
+\[
+grade = \hat{\beta_1}*studyTime + \hat{\beta_2}*priorClass + \hat{\beta_0}
+\]
+
+
+```{r}
+df$grade[df$grade>100]=100
+df$grade[df$grade<0]=0
+df$priorClass=as.factor(df$priorClass)
+
+lmResultTwoVars = lm(grade ~ studyTime + priorClass,data=df)
+summary(lmResultTwoVars)
+
+p=ggplot(df,aes(studyTime,grade,color=priorClass)) +
+  geom_point(size=3) + xlim(0,15) + ylim(70,100)
+print(p)
+
+p=p+
+  geom_abline(slope=lmResultTwoVars$coefficients[2],
+              intercept=lmResultTwoVars$coefficients[1],color='red')
+print(p)
+p=p+
+  annotate('segment',x=7.5,xend=10,
+           y=lmResultTwoVars$coefficients[1]+
+             7.5*lmResultTwoVars$coefficients[2],
+           yend=lmResultTwoVars$coefficients[1]+
+             7.5*lmResultTwoVars$coefficients[2],
+           color='blue') +
+  annotate('segment',x=10,xend=10,
+           y=lmResultTwoVars$coefficients[1]+
+             7.5*lmResultTwoVars$coefficients[2],
+           yend=lmResultTwoVars$coefficients[1]+
+             10*lmResultTwoVars$coefficients[2],
+           color='blue')
+
+
+print(p)
+p=p+
+  geom_abline(slope=lmResultTwoVars$coefficients[2],
+              intercept=lmResultTwoVars$coefficients[1]+
+                lmResultTwoVars$coefficients[3],
+              color='green') 
+print(p)
+p=p+
+  annotate('segment',x=7.5,xend=7.5,
+           y=lmResultTwoVars$coefficients[1]+
+             7.5*lmResultTwoVars$coefficients[2],
+           yend=lmResultTwoVars$coefficients[1]+
+             lmResultTwoVars$coefficients[3] +
+             7.5*lmResultTwoVars$coefficients[2],
+           linetype='dotted',size=1) 
+print(p)
+
+df %>% summarize()
+```
+
+#### Interactions in linear models
+
+What if the effect of one variable changes as a function of another variable?
+Let's take the example of how public speaking ability varies with caffeine intake.
+
+```{r}
+set.seed(1234567)
+df=data.frame(group=c(rep(-1,10),rep(1,10))) %>%
+  mutate(caffeine=runif(n())*100) %>%
+  mutate(speaking=0.5*caffeine*-group + group*20 + rnorm(20)*10)
+
+p=ggplot(df,aes(caffeine,speaking)) +
+  geom_point()
+print(p)
+
+
+```
+
+First run the linear model with just caffeine as an independent variable.
+
+```{r}
+lmResultCaffeine = lm(speaking~caffeine,data=df)
+summary(lmResultCaffeine)
+```
+
+But now let's say that we find research suggesting that anxious and non-anxious people react differently to caffeine.  First let's plot the data separately for anxious and non=anxious people.
+
+```{r}
+df = df %>% mutate(anxiety=ifelse(group==1,'anxious','notAnxious'))
+p=ggplot(df,aes(caffeine,speaking,color=anxiety)) +
+  geom_point()
+print(p)
+```
+
+Now we see that anxious people seem to perform better at low levels of caffeine while non-anxious people perform better with more caffeine.  First let's see what happens if we just include anxiety in the model.
+
+```{r}
+lmResultCafAnx = lm(speaking ~ caffeine + anxiety,data=df)
+summary(lmResultCafAnx)
+```
+
+Here we see there are no significant effects of either caffeine or anxiety, but that seems wrong.  The problem is that this model is trying to fit the same line relating speaking to caffeine for group. If we want to fit them using separate lines, we can include an *interaction* in the model, which is equivalent to fitting different lines for the two groups.
+
+```{r}
+lmResultInteraction = lm(speaking ~ caffeine + anxiety + caffeine*anxiety,data=df)
+summary(lmResultInteraction)
+```
+
+Now we see that there are effects of both caffeine and anxiety (which we call *main effects*) and an interaction between caffeine and anxiety.
+
+We can visualize them by plotting separate lines describing the predicted values for the two groups.
+
+```{r}
+df_anx=df%>%subset(anxiety=='anxious')
+df_notanx=df%>%subset(anxiety=='notAnxious')
+
+p=ggplot(df_anx,aes(caffeine,speaking)) +
+  geom_point(color='blue') +
+  geom_line(data=data.frame(x=df$caffeine[df$anxiety=='anxious'],
+                    y=lmResultInteraction$fitted.values[df$anxiety=='anxious']),
+            aes(x,y),color='blue') +
+  geom_point(data=df_notanx,aes(caffeine,speaking),color='red')+
+  geom_line(data=data.frame(x=df$caffeine[df$anxiety=='notAnxious'],
+                    y=lmResultInteraction$fitted.values[df$anxiety=='notAnxious']),
+            aes(x,y),color='red')
+print(p)
+```
+
+
+We can also compare the goodness of fit of the model with and without the interaction, using the anova() command.
+
+```{r}
+anova(lmResultCafAnx,lmResultInteraction)
+```
