@@ -1,0 +1,107 @@
+---
+title: "Session 26: R lab on statistical inference"
+output: html_notebook
+---
+
+#### Modeling repeated measures
+
+We often have data where we want to look at an effect across multiple measurements within each person.  For example, in the NHANES blood pressure data that we examined in the previous session, there are actually three measurements per person. Let's take a sample of 200 adults with all three of these measurements.
+
+```{r}
+library(NHANES)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+bpSample=NHANES %>%
+  filter(!is.na(BPSys1) & !is.na(BPSys2) & !is.na(BPSys3) & Age>17)  %>%
+  select(ID,BPSys1,BPSys2,BPSys3) %>%
+  unique() %>%
+  sample_n(200)
+
+bpSampleTidy= bpSample %>%
+  gather(key='measurement',value='BPSys',-ID)
+
+bpSampleSummary=bpSampleTidy %>% 
+  group_by(measurement) %>%
+  summarize(meanBPSys=mean(BPSys))
+bpSampleSummary
+ggplot(bpSampleTidy,aes(x=measurement,y=BPSys)) +
+  geom_violin() 
+
+
+```
+
+First set's set up a standard ANOVA model by making dummy regressors for two of the tests. This model will ignore the fact that the measurements are related (i.e. that the same people have a measurement at each time point), which violates the IID assumption that is required to inference using this model.
+
+```{r}
+bpSampleTidy = bpSampleTidy %>%
+  mutate(dummy1=as.integer(measurement=='BPSys2'),
+         dummy2=as.integer(measurement=='BPSys3'))
+
+lmResultIndependent=lm(BPSys ~ dummy1 + dummy2,data=bpSampleTidy)
+summary(lmResultIndependent)
+```
+We see that there is no significant difference in BP across the different measurements. However, there is a problem with this model, which is that it assumes that the data points are independent, when we know that they are not (since each person contributes three data points).  In order to address this, we need to build a model that also includes a separate intercept for each individual (which we call a *random intercept*).  We can do this using the lmer() function which is part of the lme4 library; this library is a workhorse in many different areas of research, because it allows us to build and fit complex "mixed effects" models. Once we do this, then all of the differences in mean between subjects are modeled rather than being part of the error.
+
+```{r}
+library(lme4)
+library(lmerTest)
+lmRepeatedMeasures = lmer(BPSys ~ measurement + (1|ID),data=bpSampleTidy)
+summary(lmRepeatedMeasures)
+anova(lmRepeatedMeasures)
+```
+
+
+
+#### multi-way ANOVA
+
+So far we have only looked at ANOVA models that include a single factor (such as the different measurements in the previous case).  However, we often want to look at relationships between discrete variables.  As an example, let's say that we want to understand how the factors of smoking and physical activity relate to BMI in the NHANES data.  Here we can test three different hypotheses:
+- Is there a relationship between smoking on BMI?
+- Is there a relationship between physical activity and BMI?
+- Is there an interaction?  That is, does the effect of smoking on BMI differ depending on level of physical activity?
+
+Let's look at this in a sample from NHANES. We first have to do a bit of data wrangling: The SmokeNow variable is only reported for people who said yes to having smoked at least 100 cigarettes in their life.  Thus, the people who say "no" to SmokeNow are former smokers, and we can imagine that many of them quit because of health problems.  We can fix this by removing the former smokers, and then looking at the Smoke100 variable; that is, we only consider someone as a smoker if they both say yes to Smoke100 and to SmokeNow.  Former smokers are left out of this analysis.
+
+```{r}
+set.seed(123456)
+bp2waySample=NHANES %>%
+  filter(!is.na(BMI) & !is.na(PhysActive) & !is.na(Smoke100) & Age>17)  %>%
+  filter(SmokeNow=='Yes' | is.na(SmokeNow)) %>%
+  mutate(Smoker=ifelse(Smoke100=='No','No','Yes')) %>%
+  select(ID,BMI,PhysActive,Smoker) %>%
+  unique() %>%
+  sample_n(400)
+
+
+bp2waySummary=bp2waySample %>% 
+  group_by(Smoker,PhysActive) %>%
+  summarize(meanBMI=mean(BMI),n=n())
+
+bp2waySummary
+ggplot(bp2waySample,aes(x=Smoker,y=BMI,color=PhysActive)) +
+  geom_violin() 
+
+ggplot(bp2waySummary,aes(x=Smoker,y=meanBMI,color=PhysActive,group=PhysActive)) +
+  geom_line(size=1)
+  #geom_bar(stat='identity',width=0.2,position=position_dodge(width = 0.2))
+```
+
+Now let's fit a two-way ANOVA model that includes both smoking and physical activity.  We first need to change the PhysActive variable (which contain Yes and No values) into values containing 1 and 0. Then we build the model using lm(): note that we can say "PhysActive*Smoker" and lm() will understand that we also want to include the main effects, such that the model is really "PhysActive + Smoker + PhysActive x Smoker".
+
+```{r}
+bp2waySample = bp2waySample %>%
+  mutate(PhysActiveInt=as.integer(PhysActive=='Yes'))
+
+lmResult2way=lm(BMI ~ PhysActive*Smoker,data=bp2waySample )
+summary(lmResult2way)
+
+```
+
+This shows three significant results:
+
+- There is a significant effect of PhysActive, reflecting the fact that physical activity leads to lower BMI (by about 3.5 points).
+- There is a significant effect of Smoking, such that smokers are on average about 2.9 points lower than nonsmokers.
+- There is an interaction, reflecting the fact that the difference in BMI between active and inactive people is much larger for non-smokers than for smokers.
+
+
