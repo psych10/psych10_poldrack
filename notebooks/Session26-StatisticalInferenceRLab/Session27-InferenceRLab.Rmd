@@ -1,17 +1,28 @@
 ---
-title: "Session 26: R lab on statistical inference"
-output: html_notebook
+title: 'Session 26: R lab on statistical inference'
+output:
+  html_document:
+    df_print: paged
 ---
+
+
+```{r,echo=FALSE,message=FALSE}
+library(NHANES)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lme4)
+library(lmerTest)
+library(brms)
+library(emmeans)
+
+```
 
 #### Modeling repeated measures
 
 We often have data where we want to look at an effect across multiple measurements within each person.  For example, in the NHANES blood pressure data that we examined in the previous session, there are actually three measurements per person. Let's take a sample of 200 adults with all three of these measurements.
 
 ```{r}
-library(NHANES)
-library(dplyr)
-library(tidyr)
-library(ggplot2)
 
 bpSample=NHANES %>%
   filter(!is.na(BPSys1) & !is.na(BPSys2) & !is.na(BPSys3) & Age>17)  %>%
@@ -42,21 +53,59 @@ bpSampleTidy = bpSampleTidy %>%
 lmResultIndependent=lm(BPSys ~ dummy1 + dummy2,data=bpSampleTidy)
 summary(lmResultIndependent)
 ```
-We see that there is no significant difference in BP across the different measurements. However, there is a problem with this model, which is that it assumes that the data points are independent, when we know that they are not (since each person contributes three data points).  In order to address this, we need to build a model that also includes a separate intercept for each individual (which we call a *random intercept*).  We can do this using the lmer() function which is part of the lme4 library; this library is a workhorse in many different areas of research, because it allows us to build and fit complex "mixed effects" models. Once we do this, then all of the differences in mean between subjects are modeled rather than being part of the error.
+
+We see that there is no significant difference in BP across the different measurements. 
+
+#### Fitting a model with a random intercept
+
+There is a problem with the previous model, which is that it assumes that the data points are independent when we know that they are not (since each person contributes three data points).  In order to address this, we need to build a model that also includes a separate intercept for each individual (which we call a *random intercept*); this will in effect remove the overall differences between individuals, leaving the errors to be independent.  We can do this using the lmer() function which is part of the lme4 library; this library is a workhorse in many different areas of research, because it allows us to build and fit complex models known as "mixed effect" models. In this case, we add "+ (1|ID)" to the model.  The "1" stands for an intercept, and "ID" is a variable that identifies each individual; this is effectively telling lmer() to compute a different intercept for each value of ID (i.e. each individual). Once we do this, then all of the differences in mean between subjects are modeled rather than becoming part of the error.
 
 ```{r}
-library(lme4)
-library(lmerTest)
 lmRepeatedMeasures = lmer(BPSys ~ measurement + (1|ID),data=bpSampleTidy)
 summary(lmRepeatedMeasures)
+
+```
+
+We can get a printout of the overall ("omnibus") F statistic comparing all of the different means, using the anova() function:
+
+```{r}
 anova(lmRepeatedMeasures)
 ```
 
+This mode shows that there is a statistically significant effect of the different measurements.
+
+#### Bayesian modeling of ANOVA
+
+We can also use a Bayesian model to perform the same analysis, via the brm() function from the brms package.  This has the advantage of giving us results that allow us to directly estimate our confidence in the parameter values.  It uses the same formula specification as lmer().  This analysis takes a bit longer and prints lots of intermediate outputs about the sampling process:
+
+```{r}
+
+brmRepeatedMeasures = brm(BPSys ~ measurement + (1|ID),data=bpSampleTidy,save_all_pars=TRUE)
 
 
-#### multi-way ANOVA
+```
+
+The fitting of the models prints out a bunch of interim information, but now we can look at the output using summary():
+
+```{r}
+summary(brmRepeatedMeasures)
+
+```
+
+What if we want to test the equivalent of the "omnibus" hypothesis that we tested using the F test in our lmer() model?  One way to do this is by comparing the fit of our model with a similar model that doesn't include the measurement factor; it just includes the intercepts computed separately for each individual.  We can fit that model here, which we call the "reduced" model.  We can then compute the Bayes factor to compare these models, which tells us how likely the data are under the full model compared to the reduced model - that is, how much more plausible is the model that includes the measurement variable, compared to not including it:
+
+```{r}
+brmReduced=brm(BPSys ~ (1|ID),data=bpSampleTidy,save_all_pars=TRUE)
+bayes_factor(brmRepeatedMeasures,brmReduced)
+
+```
+
+We see that the evidence in favor including the measurement variable in the model is very strong, telling us that there are very likely to be differences in blood pressure between the different measurements.
+
+#### Multi-way ANOVA
 
 So far we have only looked at ANOVA models that include a single factor (such as the different measurements in the previous case).  However, we often want to look at relationships between discrete variables.  As an example, let's say that we want to understand how the factors of smoking and physical activity relate to BMI in the NHANES data.  Here we can test three different hypotheses:
+
 - Is there a relationship between smoking on BMI?
 - Is there a relationship between physical activity and BMI?
 - Is there an interaction?  That is, does the effect of smoking on BMI differ depending on level of physical activity?
@@ -76,32 +125,70 @@ bp2waySample=NHANES %>%
 
 bp2waySummary=bp2waySample %>% 
   group_by(Smoker,PhysActive) %>%
-  summarize(meanBMI=mean(BMI),n=n())
+  summarize(meanBMI=mean(BMI),
+            n=n(),
+            varBMI=var(BMI)) %>%
+  mutate(crit_val_lower = qt(.05, n - 1),
+         crit_val_upper = qt(.95, n - 1),
+         ci.lower=meanBMI+(sqrt(varBMI)*crit_val_lower)/sqrt(n),
+         ci.upper=meanBMI+(sqrt(varBMI)*crit_val_upper)/sqrt(n))
 
 bp2waySummary
-ggplot(bp2waySample,aes(x=Smoker,y=BMI,color=PhysActive)) +
-  geom_violin() 
 
+pd=position_dodge(0.1)
 ggplot(bp2waySummary,aes(x=Smoker,y=meanBMI,color=PhysActive,group=PhysActive)) +
-  geom_line(size=1)
-  #geom_bar(stat='identity',width=0.2,position=position_dodge(width = 0.2))
+  geom_line(size=1,position=pd) + 
+  geom_point(size=2,position = pd) + 
+  geom_errorbar(aes(ymin = ci.lower, ymax = ci.upper), width = 0, size = 1,position=pd) +
+  ylab('mean BMI (+/- 95% CI)')
+
 ```
 
-Now let's fit a two-way ANOVA model that includes both smoking and physical activity.  We first need to change the PhysActive variable (which contain Yes and No values) into values containing 1 and 0. Then we build the model using lm(): note that we can say "PhysActive*Smoker" and lm() will understand that we also want to include the main effects, such that the model is really "PhysActive + Smoker + PhysActive x Smoker".
+Now let's fit a two-way ANOVA model that includes both smoking and physical activity.  We build the model using lm(): note that we can say "PhysActive*Smoker" and lm() will understand that we also want to include the main effects as well, such that the model will really be "PhysActive + Smoker + PhysActive x Smoker".
 
 ```{r}
-bp2waySample = bp2waySample %>%
-  mutate(PhysActiveInt=as.integer(PhysActive=='Yes'))
 
 lmResult2way=lm(BMI ~ PhysActive*Smoker,data=bp2waySample )
 summary(lmResult2way)
 
 ```
 
-This shows three significant results:
+This shows that there is a significant interaction between the two factors, such that the effect of physical activity on BMI differs between smokers and nonsmokers.  If we examine the figure we can interpret this more clearly; There seems to be a large effect of physical activity for non-smokers, but not for smokers.  Note that there are also significant main effects of both PhysActive and Smoker, but these must be interpreted with caution because of the presence of the interaction; they basically tell us that there is an effect, conditional on the values of the other effects.
 
-- There is a significant effect of PhysActive, reflecting the fact that physical activity leads to lower BMI (by about 3.5 points).
-- There is a significant effect of Smoking, such that smokers are on average about 2.9 points lower than nonsmokers.
-- There is an interaction, reflecting the fact that the difference in BMI between active and inactive people is much larger for non-smokers than for smokers.
+We can look more closely at the means for each condition to determine what is going on.  In particular, we can do a "post-hoc" test to see which of the individual conditions are different from one another, using the emmeans() function from the emmeans ("estimated marginal means") package.  This computes a statistical test between each of the pairs of means, and then tells us which are different from which others.
 
 
+```{r}
+
+
+# compute the differences between each of the means
+leastsquare = emmeans(lmResult2way, 
+                      pairwise ~ PhysActive:Smoker,
+                      adjust="tukey")
+ 
+# display the results by grouping using letters
+
+cld(leastsquare, 
+    alpha=.05,  
+    Letters=letters)$emmeans
+```
+
+Any two conditions that share one or more of the same grouping letters are not significantly different from one another, after correcting for the multiple tests. In this case, Yes/Yes and No/No are not significant different from another another (both are in group b), while No/No is signficantly different from Yes/No and No/Yes.
+
+#### Bayesian 2-way anova
+
+Let's fit the same model using our Bayesian approach:
+
+```{r}
+brmResult2way=brm(BMI ~ PhysActive*Smoker,data=bp2waySample,save_all_pars = TRUE)
+summary(brmResult2way)
+```
+
+Here again we can compute a Bayes Factor to compare two different models; in this case, let's compare the model containing an interaction (the one fitted above) to an "additive" model that only include main effects. 
+
+```{r}
+brmResult2wayAdditive=brm(BMI ~ PhysActive + Smoker,data=bp2waySample,save_all_pars = TRUE)
+bayes_factor(brmResult2way,brmResult2wayAdditive)
+```
+
+This shows us that the data are 90 times more likely under the full model compared to the additive model with an interaction, providing strong evidence for the presence of an interaction.
