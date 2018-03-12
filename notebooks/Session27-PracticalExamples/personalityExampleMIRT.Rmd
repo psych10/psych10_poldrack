@@ -1,0 +1,179 @@
+---
+title: 'R Notebook: Personality example'
+output:
+  html_document:
+    df_print: paged
+---
+
+#### Is personality related to height?
+
+To answer this question, we will use data from  https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SD7SVE
+(see also data paper at https://openpsychologydata.metajnl.com/articles/10.5334/jopd.al/).
+
+Here is the description from the paper:
+
+- These data were collected to evaluate the structure of personality constructs in the temperament domain. In the context of modern personality theory, these constructs are typically construed in terms of the Big Five (Conscientiousness, Agreeableness, Neuroticism, Openness, and Extraversion) though several additional constructs were included here. Approximately 24,000 individuals were administered random subsets of 696 items from 92 public-domain personality scales using the Synthetic Aperture Personality Assessment method between December 8, 2013 and July 26, 2014. 
+
+This is a very useful dataset because it includes personality measurements as well as measurements of height, which will let us answer our question of interest. We are going to focus on a subset of the 696 items tested in the study, in order to make the analysis easier; we will use just the 300 items that were part of the NEO personality inventory. 
+
+First, let's load the data and clean them up.
+
+```{r}
+library(dplyr)
+
+load('personality/sapaTempData696items08dec2013thru26jul2014.RData')
+sapaItemsFull=sapaTempData696items08dec2013thru26jul2014[,25:720]
+itemInfo=read.table('personality/ItemInfo696.csv',sep=',',row.names=1,header=TRUE)
+neoItems=itemInfo$IPIPneo!="NULL"
+neoDataFull=sapaItemsFull[,neoItems]
+
+itemCodes=names(neoDataFull)
+nonNA=apply(!is.na(neoDataFull),1,sum)
+
+# let's drop any individuals who did not respond to at least 100 of the NEO items
+minItems=100
+neoData=neoDataFull[nonNA>=minItems,]
+neoDemographics=sapaTempData696items08dec2013thru26jul2014[nonNA>=minItems,1:24]
+
+dim(neoData)
+```
+
+This is a nice dataset because it is so large (almost 1500 individuals), but it is also a tricky dataset, because each of the subjects only computed a subset of the entire set of 300 questions.  Let's look at a histogram of the number of items that each subject completed (after removing those who responded to fewer than 100).
+
+```{r}
+library(ggplot2)
+ggplot(data.frame(nItems=nonNA[nonNA>=minItems]),aes(nItems)) + 
+  geom_histogram(bins=100)
+```
+
+
+#### Reducing the data from 300 items to 5 dimensions
+
+We have responses for each subject on a subset of the 300 items on the NEO inventory, but we are pretty sure that there are not actually 300 different aspects of personality; many of the items are measuring the same underying personality traits  In the personality literature, many people claim that personality can be explained in terms of five different basic traits, known as the *Big 5* (descriptions adapted from https://en.wikipedia.org/wiki/Big_Five_personality_traits):
+
+- *Openness to experience* (inventive/curious vs. consistent/cautious) - Openness reflects the degree of intellectual curiosity, creativity and a preference for novelty and variety a person has. It is also described as the extent to which a person is imaginative or independent and depicts a personal preference for a variety of activities over a strict routine. 
+- *Conscientiousness* (efficient/organized vs. easy-going/careless) -  A tendency to be organized and dependable, show self-discipline, act dutifully, aim for achievement, and prefer planned rather than spontaneous behavior.
+- *Extraversion* (outgoing/energetic vs. solitary/reserved) - Energy, positive emotions, surgency, assertiveness, sociability and the tendency to seek stimulation in the company of others, and talkativeness. 
+- *Agreeableness* (friendly/compassionate vs. challenging/detached). A tendency to be compassionate and cooperative rather than suspicious and antagonistic towards others. 
+- *Neuroticism* (sensitive/nervous vs. secure/confident). Neuroticism identifies certain people who are more prone to psychological stress
+
+We would like to be able to reduce our data from 300 different questions down to the 5 personality dimensions. Once we have done that, then we can work with the derived scores for each of those dimensions, rather than working with the data from the individual questions.  We will do this using a method called *multidimensional item response theory* (MIRT) analysis via the mirt R package. 
+
+One tricky aspect of these data is that so many of the responses are missing. So far in this class we have just dropped invidiuals with missing values, but in this dataset *everyone* has missing values! Fortunately, the mirt() function knows how to deal with missing data.  If it did not, then we could also have used a method called *imputation* to make a guess as to the most likely values of the missing data. 
+
+
+
+```{r}
+library(mirt)
+modeltype='graded'
+ncomps=5
+if (file.exists('neoMIRT.Rdata')){
+  load('neoMIRT.Rdata')
+  load('neoMIRTFactorScores.Rdata')
+} else {
+  m=mirt(neoData,
+       ncomps,SE=TRUE,
+       technical=list(MHRM_SE_draws=5000,MAXQUAD=100000,NCYCLES=10000),
+       verbose=TRUE,method='MHRM',itemtype=modeltype)
+  save(m,file='neoMIRT.Rdata')
+  fc=fscores(m,QMC=TRUE,method='MAP')
+  save(fc,file='neoMIRTFactorScores.Rdata')
+  
+}
+s=summary(m,verbose=FALSE)
+neoDataFull=cbind(neoDemographics,fc) %>%
+  filter(!is.na(height) & !is.na(gender))
+
+#faResult=irt.fa(sapaItemsCompletedRound %>% sample_n(50),nfactors=5)
+```
+
+This loads the data (which are composed of scores on each of the five dimensions identified by MIRT) and joins them with the demographic data which includes the height variable.  The MIRT analysis takes several hours to finish, so we have saved the scores so that we don't need to rerun the analysis each time.
+
+We still need to figure out which of the dimensions identified by MIRT corresponds to our extraversion dimension.  To do that, let's look at which specific questions are most strongly associated with each of the dimensions.  We can then label them according to their most relevant Big 5 dimension. (I have included the labels for each of the traits, which I came up with by examining the items and comparing them to the definitions for these traits.)
+
+```{r}
+big5labels=c('Conscientiousness','Extraversion','Agreeableness','Neuroticism','Openness to experience')
+for (i in 1:5){
+  print(paste('Dimension',i,':',big5labels[i]))
+  idx=order(s$rotF[,i],decreasing = TRUE)
+  codes_sorted=itemCodes[idx]
+  print('top items'  )
+  for (j in 1:3){
+    print(sprintf('%s (%f): %s',codes_sorted[j],s$rotF[idx[j],i],itemInfo[codes_sorted[j],1]))
+  }
+  print('bottom items')
+  for (j in seq(length(codes_sorted),length(codes_sorted)-2,-1)){
+    print(sprintf('%s (%f): %s',codes_sorted[j],s$rotF[idx[j],i],itemInfo[codes_sorted[j],1]))
+  }
+  print('')
+
+}
+```
+
+Now that we have scores for each individual, let's test the relationship between height and extraversion (variable F2 in our dataset).
+
+```{r}
+lmResultHeight=lm(F2 ~ height,data=neoDataFull)
+summary(lmResultHeight)
+```
+
+This shows us that our initial hypothesis was confirmed; taller people are more extraverted.  However, note that the amount of variance in extraversion accounted for by height is miniscule, about 1/2 of 1 percent. 
+
+Can you think of any lurking variables that might be causing this relationship?   Gender is one that comes to mind; since men are taller than women, it might be that the relationship is due to gender rather than height per se.  Let's start by fitting a model that just includes gender.
+
+```{r}
+lmResultGender=lm(F2 ~ gender ,data=neoDataFull)
+summary(lmResultGender)
+```
+
+
+```{r}
+lmResultGender=lm(F2 ~ gender + height ,data=neoDataFull)
+summary(lmResultGender)
+
+```
+
+That's wierd - when we put both gender and height into the model, suddenly neither of them is significantly related to extraversion.  How could that happen?  It turns out that this is related to the relationship between height and gender:
+
+```{r}
+cor(neoDataFull$height,as.numeric(neoDataFull$gender=='male'))
+```
+
+There is a fairly strong correlation between height and gender, which is the cause of the problem with the model; this is known as "multicollinearity".  When the different independent variables in the model are correlated, the general linear model only assigns the unique variance to each of the regressors, which makes the parameter estimates more variable.  
+
+#### Exploratory analysis
+
+We might also be interested in exploring whether other personality traits are related to height.  Because we know that gender and height are related, and that gender might separately be related to personality, we also include gender in the models. However, remember that whenever we run multiple statistical tests, we need to control for multiple tests. In this case, we can use the Bonferroni correction, in which we divide the alpha level by the number of tests; thus, we will not consider the effect of height significant unless it reaches p<0.01 (.05/5). If we were interested in also making inferences about gender, then we would want to use 0.05/10=0.005 as our cutoff rather than 0.01.
+
+##### Factor 1: Conscientiousness
+
+
+```{r}
+lmResultGender=lm(F1 ~ gender + height ,data=neoDataFull)
+summary(lmResultGender)
+
+```
+
+##### Factor 3: Agreeableness
+
+```{r}
+lmResultGender=lm(F3 ~ gender + height ,data=neoDataFull)
+summary(lmResultGender)
+
+```
+
+##### Factor 4: Neuroticism
+```{r}
+lmResultGender=lm(F4 ~ gender + height ,data=neoDataFull)
+summary(lmResultGender)
+
+```
+
+##### Openness to experience
+
+```{r}
+lmResultGender=lm(F5 ~ gender + height ,data=neoDataFull)
+summary(lmResultGender)
+
+```
+
