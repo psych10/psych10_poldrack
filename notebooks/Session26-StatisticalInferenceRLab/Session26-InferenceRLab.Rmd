@@ -23,7 +23,7 @@ library(emmeans)
 We often have data where we want to look at an effect across multiple measurements within each person.  For example, in the NHANES blood pressure data that we examined in the previous session, there are actually three measurements per person. Let's take a sample of 200 adults with all three of these measurements.
 
 ```{r}
-
+set.seed(123456)
 bpSample=NHANES %>%
   filter(!is.na(BPSys1) & !is.na(BPSys2) & !is.na(BPSys3) & Age>17)  %>%
   select(ID,BPSys1,BPSys2,BPSys3) %>%
