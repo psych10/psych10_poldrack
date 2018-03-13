@@ -81,18 +81,28 @@ if (file.exists('neoMIRT.Rdata')){
   
 }
 s=summary(m,verbose=FALSE)
+
+big5labels=c('Conscientiousness','Extraversion','Agreeableness','Neuroticism','Openness to experience')
+shortLabels=c('Conscientiousness','Extraversion','Agreeableness','Neuroticism','Openness')
+# reorient the dimensions so they match the labels
+reverse_dimensions=c(1,2,4)
+for (i in reverse_dimensions){
+  fc[,i]=fc[,i]*-1
+  s$rotF[,i]=s$rotF[,i]*-1
+}
+
+fc=as.data.frame(fc)
+names(fc)=shortLabels
 neoDataFull=cbind(neoDemographics,fc) %>%
   filter(!is.na(height) & !is.na(gender))
 
-#faResult=irt.fa(sapaItemsCompletedRound %>% sample_n(50),nfactors=5)
 ```
 
-This loads the data (which are composed of scores on each of the five dimensions identified by MIRT) and joins them with the demographic data which includes the height variable.  The MIRT analysis takes several hours to finish, so we have saved the scores so that we don't need to rerun the analysis each time.
+This loads the data (which are composed of estimated scores for each person on each of the five dimensions identified by MIRT) and joins them with the demographic data which includes the height variable.  The MIRT analysis takes several hours to finish, so we have saved the scores so that we don't need to rerun the analysis each time.
 
-We still need to figure out which of the dimensions identified by MIRT corresponds to our extraversion dimension.  To do that, let's look at which specific questions are most strongly associated with each of the dimensions.  We can then label them according to their most relevant Big 5 dimension. (I have included the labels for each of the traits, which I came up with by examining the items and comparing them to the definitions for these traits.)
+We still need to figure out which of the dimensions identified by MIRT corresponds to our each of the Big 5 dimensions.  To do that, we can use some additional data that MIRT provides us, which tells how related each questionnaire item is to each scale.  To figure out what each scale means, let's look at which specific questions are most strongly associated with each of the dimensions in either the positive or negative direction.  We can then label them according to their most relevant Big 5 dimension. (I have included the labels for each of the traits, which I came up with by examining the items and comparing them to the definitions for these traits.)
 
 ```{r}
-big5labels=c('Conscientiousness','Extraversion','Agreeableness','Neuroticism','Openness to experience')
 for (i in 1:5){
   print(paste('Dimension',i,':',big5labels[i]))
   idx=order(s$rotF[,i],decreasing = TRUE)
@@ -110,30 +120,51 @@ for (i in 1:5){
 }
 ```
 
-Now that we have scores for each individual, let's test the relationship between height and extraversion (variable F2 in our dataset).
+
+Now that we have scores for each individual, let's test the relationship between height and the extraversion scale.
 
 ```{r}
-lmResultHeight=lm(F2 ~ height,data=neoDataFull)
+lmResultHeight=lm(Extraversion ~ height,data=neoDataFull)
 summary(lmResultHeight)
 ```
 
-This shows us that our initial hypothesis was confirmed; taller people are more extraverted.  However, note that the amount of variance in extraversion accounted for by height is miniscule, about 1/2 of 1 percent. 
+This shows us that our initial hypothesis was not confirmed; in fact, taller people are *less* extraverted than shorter people.  
 
 Can you think of any lurking variables that might be causing this relationship?   Gender is one that comes to mind; since men are taller than women, it might be that the relationship is due to gender rather than height per se.  Let's start by fitting a model that just includes gender.
 
 ```{r}
-lmResultGender=lm(F2 ~ gender ,data=neoDataFull)
+lmResultGender=lm(Extraversion ~ gender ,data=neoDataFull)
 summary(lmResultGender)
 ```
 
+There is also significant relationship between gender and extraversion.  Let's plot the relationship between gender and all of the personality traits:
 
 ```{r}
-lmResultGender=lm(F2 ~ gender + height ,data=neoDataFull)
+library(cowplot)
+p1=ggplot(neoDataFull,aes(x=gender,y=Extraversion)) +
+  geom_boxplot()
+p2=ggplot(neoDataFull,aes(x=gender,y=Conscientiousness)) +
+  geom_boxplot()
+p3=ggplot(neoDataFull,aes(x=gender,y=Neuroticism)) +
+  geom_boxplot()
+p4=ggplot(neoDataFull,aes(x=gender,y=Agreeableness)) +
+  geom_boxplot()
+p5=ggplot(neoDataFull,aes(x=gender,y=Openness)) +
+  geom_boxplot()
+
+plot_grid(p1,p2,p3,p4,p5,ncol=2)
+```
+
+It's clear that gender is important, so let's put both gender and height into a model.
+
+```{r}
+lmResultGender=lm(Extraversion ~ gender*height ,data=neoDataFull)
 summary(lmResultGender)
 
 ```
 
-That's wierd - when we put both gender and height into the model, suddenly neither of them is significantly related to extraversion.  How could that happen?  It turns out that this is related to the relationship between height and gender:
+Wait - when we put both gender and height into the model, suddenly neither of them is significantly related to extraversion.  How could that happen?  It turns out that this is related to the relationship between height and gender.  Let's compute the correlation between these - It might seem weird to compute the correlation between a continuous variable (height) and a binary variable (gender), but it's actually ok - it's known as a "point biserial correlation".
+
 
 ```{r}
 cor(neoDataFull$height,as.numeric(neoDataFull$gender=='male'))
@@ -141,15 +172,17 @@ cor(neoDataFull$height,as.numeric(neoDataFull$gender=='male'))
 
 There is a fairly strong correlation between height and gender, which is the cause of the problem with the model; this is known as "multicollinearity".  When the different independent variables in the model are correlated, the general linear model only assigns the unique variance to each of the regressors, which makes the parameter estimates more variable.  
 
+However, note that the overall F test remains significant, even if all of the individual parameters are non-significant.  This is because the parameters only reflect the variance that is specific to each X variable, while the F test reflects all of the variance in the X variables, including the shared variance.  Thus, one can say that together height and gender explain significant variance in Extraversion, though the amount of variance explained is very small (about 1/2 of 1%).
+
 #### Exploratory analysis
 
-We might also be interested in exploring whether other personality traits are related to height.  Because we know that gender and height are related, and that gender might separately be related to personality, we also include gender in the models. However, remember that whenever we run multiple statistical tests, we need to control for multiple tests. In this case, we can use the Bonferroni correction, in which we divide the alpha level by the number of tests; thus, we will not consider the effect of height significant unless it reaches p<0.01 (.05/5). If we were interested in also making inferences about gender, then we would want to use 0.05/10=0.005 as our cutoff rather than 0.01.
+We might also be interested in exploring whether other personality traits are related to height.  Because we know that gender and height are related, and that gender might separately be related to personality, we also include gender (and the interaction) in the models. However, remember that whenever we run multiple statistical tests, we need to control for multiple tests. In this case, we can use the Bonferroni correction, in which we divide the alpha level by the number of tests; thus, we will not consider the effect of height significant unless it reaches p<0.01 (.05/5). If we were interested in also making inferences about gender (rather than just including it in order to make the model complete), then we would want to use 0.05/10=0.005 as our cutoff; in general, we need to figure out how many hypotheses we are testing, and then dividing alpha by that number. Note that we need to make this decision *before* we see the data!
 
 ##### Factor 1: Conscientiousness
 
 
 ```{r}
-lmResultGender=lm(F1 ~ gender + height ,data=neoDataFull)
+lmResultGender=lm(Conscientiousness ~ gender*height ,data=neoDataFull)
 summary(lmResultGender)
 
 ```
@@ -157,14 +190,14 @@ summary(lmResultGender)
 ##### Factor 3: Agreeableness
 
 ```{r}
-lmResultGender=lm(F3 ~ gender + height ,data=neoDataFull)
+lmResultGender=lm(Agreeableness ~ gender*height ,data=neoDataFull)
 summary(lmResultGender)
 
 ```
 
 ##### Factor 4: Neuroticism
 ```{r}
-lmResultGender=lm(F4 ~ gender + height ,data=neoDataFull)
+lmResultGender=lm(Neuroticism ~ gender*height ,data=neoDataFull)
 summary(lmResultGender)
 
 ```
@@ -172,8 +205,28 @@ summary(lmResultGender)
 ##### Openness to experience
 
 ```{r}
-lmResultGender=lm(F5 ~ gender + height ,data=neoDataFull)
+lmResultGender=lm(Openness ~ gender*height ,data=neoDataFull)
 summary(lmResultGender)
 
 ```
+
+It turns out that none of the height effects reach the corrected p<.01 threshold. 
+
+However, if we look at the F statistics for the models, we can see that several of them have significant effects, even at the corrected level:
+
+Conscientiousness:
+F-statistic: 5.516 on 3 and 1370 DF,  p-value: 0.0009147
+
+Agreeableness:
+F-statistic: 31.89 on 3 and 1370 DF,  p-value: < 2.2e-16
+
+Neuroticism:
+F-statistic: 7.756 on 3 and 1370 DF,  p-value: 3.882e-05
+
+These results tell us that the combination of gender and height explain a significant amount of data in these traits, but since they are correlated with one another, we can't know which of those variables is responsible for the effect.  Remember that the interpretation of these results is just like that for correlation; we never know whether some other third variable is causing the relationship that we observe, so we can't infer causal relations from these results.
+
+
+
+
+
 
