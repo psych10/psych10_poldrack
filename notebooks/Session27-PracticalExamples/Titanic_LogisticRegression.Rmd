@@ -1,0 +1,119 @@
+---
+title: 'Logistic regression example: Titanic survival'
+output:
+  html_document:
+    df_print: paged
+---
+
+In the examples of linear regression that we have encountered so far, the dependent (y) variable has been continuous. However, sometimes we wish to model a binary outcome; linear regression is inappropriate for this, since it will always give a continuous output instead of a binary output.  There is another tool called *logistic regression* that we can use to model a binary output variable.  Let's try it out using the Titanic survival dataset; we need the data for each individual, which we can obtain from https://www.kaggle.com/c/titanic/data.
+
+Our goal is to see whether we can predict survival from age, gender, and the price of the passenger's ticket.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+titanicData=read.table('titanic/train.csv',sep=',',header=TRUE)
+
+# create a log-transformed version of ticket price since
+# the raw prices are skewed
+
+titanicData = titanicData %>%
+  filter(!is.na(Survived) & !is.na(Fare) & !is.na(Sex) & !is.na(Age) & Fare>0) %>%
+  mutate(logFare = log(Fare),
+         survivedFactor=as.factor(Survived)) 
+```
+
+First let's plot the data so that we can get an initial feel for them.
+
+```{r}
+p1=ggplot(titanicData,aes(x=as.factor(Survived),y=logFare)) +
+  geom_boxplot()
+
+p2=ggplot(titanicData,aes(x=as.factor(Survived),y=Age)) +
+  geom_boxplot()
+
+plot_grid(p1,p2)
+
+table(titanicData$Sex,titanicData$Survived)
+```
+
+Now let's set up the model.  We can't use lm() since it only works with linear regression; logistic regression is an example of a *generalized linear model* in which the output is not a linear function of the input, but instead has to be somehow transfromed.  We can use the glm() function instead.  Let's start with a very simple model that only includes the (log-transformed) fare that the individual paid for their ticket.
+
+```{r}
+logregResultFare = glm(Survived ~  logFare ,
+                   data=titanicData,family = binomial)
+summary(logregResultFare)
+```
+
+Clearly there is a very strong relationship between survival and the fare.  Let's see what logistic regression is doing by plotting its predicted response for each level of fare:
+
+```{r}
+predictedSurvivalFromFare = predict(logregResultFare,type='response')
+df=data.frame(predictedSurvivalFromFare,
+                  Survived=titanicData$Survived,
+                  logFare=titanicData$logFare,
+                  predictSurvived=as.factor(predictedSurvivalFromFare>0.5)) %>%
+         mutate(predictionAccuracy=as.logical(predictSurvived)==(Survived==1))
+ggplot(df,
+       aes(logFare,predictedSurvivalFromFare,color=predictSurvived)) + 
+  geom_point() +
+  geom_point(aes(logFare,Survived,color=predictionAccuracy)) +
+  geom_hline(yintercept = 0.5,linetype='dotted')
+
+```
+
+We can compute how well the model performed by looking at how accurately it predicts who survived:
+
+```{r}
+predictedSurvivalBinary=fitted.results <- ifelse(predictedSurvivalFromFare > 0.5,1,0)
+accuracy = mean(predictedSurvivalBinary == titanicData$Survived)
+accuracy
+```
+
+We can see that we are able to predict survival somewhat, but remember that this estimate is optimistic, because it is testing the predictions on the same data used to fit the model.  In order to get a more accurate estimate of out-of-sample prediction, we would want to use cross-validation.  Previously we did cross-validation by hand, but there is an R package called caret that provides tools that can do it for us more easily.  See https://www.r-bloggers.com/cross-validation-for-predictive-analytics-using-r/ for more on this.
+
+```{r}
+library(caret)
+
+classes=titanicData$Survived
+predictors=titanicData %>% select(logFare)
+
+
+set.seed(12345)
+cv_splits <- createFolds(classes, k = 10, returnTrain = TRUE)
+
+fit <- train(survivedFactor ~  logFare, data = titanicData,
+                    method = "glm",family='binomial',
+             trControl=trainControl(method = "cv", number = 10))
+fit
+```
+
+Now let's see what happens with a more complex model, including fare and sex.
+
+```{r}
+
+
+set.seed(12345)
+cv_splits <- createFolds(classes, k = 10, returnTrain = TRUE)
+
+fit <- train(survivedFactor ~  logFare + Sex, data = titanicData,
+                    method = "glm",family='binomial',
+             trControl=trainControl(method = "cv", number = 10))
+
+fit
+```
+
+Let's see if adding age helps further improve the model's predictions.
+
+```{r}
+set.seed(12345)
+cv_splits <- createFolds(classes, k = 10, returnTrain = TRUE)
+
+fit <- train(survivedFactor ~  logFare + Sex + Age, data = titanicData,
+                    method = "glm",family='binomial',
+             trControl=trainControl(method = "cv", number = 10))
+
+fit
+
+```
+
