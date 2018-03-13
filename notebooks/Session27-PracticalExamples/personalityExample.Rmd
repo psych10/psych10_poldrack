@@ -1,0 +1,99 @@
+---
+title: 'R Notebook: Personality example'
+output:
+  html_document:
+    df_print: paged
+---
+
+#### Is personality related to height?
+
+To answer this question, we will use data from https://openpsychometrics.org/_rawdata/ for Cattell's 16 Personality Factors Test collected online from 49159 individuals.
+
+```{r}
+library(dplyr)
+
+personalityDf=read.table('16PF/data.csv',sep='\t',header=TRUE)
+
+sapaItemsFull=sapaTempData696items08dec2013thru26jul2014[,25:720]
+itemInfo=read.table('personality/ItemInfo696.csv',sep=',',row.names=1)
+itemCodes=names(sapaItemsFull)
+nonNA=apply(!is.na(sapaItemsFull),1,sum)
+
+# let's drop any individuals who did not respond to at least 70 items - that still leaves 
+# more than 17000 subjects
+sapaItems=sapaItemsFull[nonNA>70,]
+```
+
+This is a very useful dataset because it includes personality measurements as well as measurements of height, which will let us answer our question of interest.  In addition, it's a very large dataset, so we can fit our model to half of the data and then test our prediction in a validation sample (i.e. the left-out half).  However, it is also a tricky dataset, because each of the subjects only computed a subset of the entire set of 696 questions.  Let's look at a histogram of the number of items that each subject completed.
+
+```{r}
+library(ggplot2)
+ggplot(data.frame(nonNA),aes(nonNA)) + 
+  geom_histogram(bins=100)
+```
+
+
+#### Imputation
+
+One tricky aspect of these data is that so many of the responses are missing. So far in this class we have just dropped invidiuals with missing values, but in this dataset *everyone* has missing values! We will instead take a different approach, known as "imputation."  The idea is that the computer tries to figure out what the best value would be to stand in for the missing value.  We could use a really simple strategy, like replacing any missing values of a particular variable with the mean for that variable. However, there are also much fancier strategies that can do a better job of figuring out what the best value would be to stand in for the missing value.  We will use one developed by Trevor Hastie in the Stanford Statistics Department, called softImpute.  You can read more about how softImpute works here:
+
+https://web.stanford.edu/~hastie/swData/softImpute/vignette.html
+
+```{r}
+use_existing=1
+if (use_existing){
+  load('sapaItemsCompleted.RData')
+} else {
+  library(softImpute)
+  impFit=softImpute(as.matrix(sapaItems),rank.max=50,trace.it = TRUE)
+  sapaItemsCompleted=complete(sapaItems,impFit)
+  save(sapaItemsCompleted,file='sapaItemsCompleted.RData')
+}
+```
+
+
+Now we have the data that have been imputed for each item, we have (estimated) data for each person across all 696 items. However, we are pretty sure that there are not actually 696 different aspects of personality; many of the items are measuring the same thing.  In the personality literature, many people claim that personality can be explained in terms of five different basic traits, known as the *Big 5* (descriptions adapted from https://en.wikipedia.org/wiki/Big_Five_personality_traits):
+
+- *Openness to experience* (inventive/curious vs. consistent/cautious) - Openness reflects the degree of intellectual curiosity, creativity and a preference for novelty and variety a person has. It is also described as the extent to which a person is imaginative or independent and depicts a personal preference for a variety of activities over a strict routine. 
+- *Conscientiousness* (efficient/organized vs. easy-going/careless) -  A tendency to be organized and dependable, show self-discipline, act dutifully, aim for achievement, and prefer planned rather than spontaneous behavior.
+- *Extraversion* (outgoing/energetic vs. solitary/reserved) - Energy, positive emotions, surgency, assertiveness, sociability and the tendency to seek stimulation in the company of others, and talkativeness. 
+- *Agreeableness* (friendly/compassionate vs. challenging/detached). A tendency to be compassionate and cooperative rather than suspicious and antagonistic towards others. 
+- *Neuroticism* (sensitive/nervous vs. secure/confident). Neuroticism identifies certain people who are more prone to psychological stress
+
+We would like to be able to reduce our data from 696 different questions down to the 5 personality dimensions.  We can do that using a statistical tool called "factor analysis", which was initially developed in the context of intelligence testing.
+
+```{r}
+library(mirt)
+sapaItemsCompletedRound=round(sapaItemsCompleted)
+sapaItemsCompletedRound[sapaItemsCompletedRound<1]=1
+sapaItemsCompletedRound[sapaItemsCompletedRound>6]=1
+modeltype='graded'
+ncomps=5
+m=mirt(sapaItemsCompletedRound %>% sample_n(500),
+       ncomps,SE=TRUE,
+       technical=list(MHRM_SE_draws=5000,MAXQUAD=100000,NCYCLES=10000),
+       verbose=TRUE,method='MHRM',itemtype=modeltype)
+
+#faResult=irt.fa(sapaItemsCompletedRound %>% sample_n(50),nfactors=5)
+```
+
+
+```{r}
+big5labels=c('Agreeableness','Neuroticism','Extraversion',)
+for (i in 1:5){
+  print(paste('Dimension',i))
+  idx=order(impFit$v[,i],decreasing = TRUE)
+  codes_sorted=itemCodes[idx]
+  print('top items'  )
+  for (j in 1:3){
+    print(sprintf('%s (%f): %s',codes_sorted[j],impFit$v[idx[j],i],itemInfo[codes_sorted[j],1]))
+  }
+  print('bottom items')
+  for (j in seq(length(codes_sorted),length(codes_sorted)-2,-1)){
+    print(sprintf('%s (%f): %s',codes_sorted[j],impFit$v[idx[j],i],itemInfo[codes_sorted[j],1]))
+  }
+  print('')
+
+}
+```
+
