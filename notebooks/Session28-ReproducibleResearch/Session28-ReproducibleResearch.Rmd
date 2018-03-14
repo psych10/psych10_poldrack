@@ -110,15 +110,3 @@ ggplot(df,aes(estimate,fill=significant)) +
 
 ```
 
-
-#### Ebay example
-
-```{r}
-ebayData=read.csv('ebay_shoes.csv',header=FALSE)
-ebayData$idx=seq(1,nrow(ebayData))
-ggplot(ebayData,aes(V1))+ 
-  geom_histogram() +
-  xlab('Bid ($)')
-
-```
-
