@@ -1,0 +1,81 @@
+---
+title: 'R Notebook: Controlling for covariates'
+output:
+  html_document:
+    df_print: paged
+---
+
+
+Often we wish to use regression to understand relationships between variables in the presence of another confounding variable.  For example, let's say that we want to understand the relation between job performance and experience. One potential confound is age; it's plausible that age will be correlated with experience, and that age could also separately affect job performance.  Let's generate a synthetic dataset to test this.
+
+```{r}
+library(dplyr)
+library(ggplot2)
+set.seed(12345)
+# first generate the age data, and then generate a correlated experience variable
+exampleDf=data.frame(age=rnorm(20,mean=30,sd=10)) %>%
+  mutate(experience=age*0.3 + rnorm(20,sd=5))
+
+
+ggplot(exampleDf,aes(age,experience)) +
+  geom_point() + 
+  geom_smooth(method='lm',se=FALSE) +
+  ggtitle(sprintf('correlation = %0.3f',cor(exampleDf$age,exampleDf$experience)))
+
+```
+
+Let's generate some data such that job performance is determined by experience.  
+
+```{r}
+exampleDf = exampleDf %>%
+  mutate(performance=experience*0.5 + rnorm(20,sd=2.5))
+
+demean=TRUE
+if (demean){
+  exampleDf=as.data.frame(scale(exampleDf))
+}
+ggplot(exampleDf,aes(experience,performance)) +
+  geom_point() + 
+  geom_smooth(method='lm',se=FALSE) +
+  ggtitle(sprintf('correlation = %0.3f',cor(exampleDf$performance,exampleDf$experience)))
+
+```
+
+We can fit a model describing this relationship using lm():
+
+```{r}
+lmResultExperience=lm(performance ~ experience + 0, data=exampleDf)
+summary(lmResultExperience)
+```
+
+This shows, as expected, a strong relationship between experience and performance. What if we fit a model of the relation between age and performance?
+
+```{r}
+lmResultAge=lm(performance ~ age + 0, data=exampleDf)
+exampleDf$ageResidual=lmResultAge$residuals
+
+summary(lmResultAge)
+
+```
+
+We see that there is also a significant relationship between age and performance, which is due to the fact that age is correlated with experience. In this case, we would say that the relationship between experience and performance is confounded by the effect of age.
+
+How can we deal with this?  Intuitively, we would like to look at the relationship between performance and experience after removing the effect of age. One way that we could do this is to first fit a model relating age and performance (which we did above in lmResultAge), and then use the residuals from that model to fit a second model testing for the effects of experience (after also removing the effect of age from the experience variable).  This is in effect asking: after we remove the linear effect of age from both the experience and performance variables, is there still an effect of experience?
+
+```{r}
+lmResultExperienceResidual=lm(experience ~ age + 0,data=exampleDf)
+exampleDf$experienceResidAge=lmResultExperienceResidual$residuals
+lmResultExperienceAfterAge = lm(ageResidual ~ experienceResidAge + 0,data=exampleDf)
+summary(lmResultExperienceAfterAge)
+
+```
+
+
+Estimating the model in this way is somewhat of a pain, but fortunately we don't have to.  We can simply but both variables into a single model:
+
+```{r}
+lmCombined=lm(performance ~ age + experience + 0, data=exampleDf)
+summary(lmCombined)
+```
+
+The general linear model estimates include only the unique variance associated with each parameter; the "shared variance" (reflected in the correlation between age and experience) is included in the overall model (reflected in the F statistic and R-squared), but only the unique variance is reflected in each individual parameter estimate. 
