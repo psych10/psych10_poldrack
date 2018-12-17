@@ -19,6 +19,21 @@ library(tidyr)
 
 Let's start by asking the question that the Chevalier de Mere asked Blaise Pascal:  Which is more likely - rolling at least one six in four throws of a single die, or rolling at least one double-six in 24 throws of a pair of dice?
 
+First let's start by computing the answers the way that Blaise Pascal did, using probability theory.
+
+```{r}
+p_no_sixes_in_four_throws = (5/6)**4
+p_at_least_one_six_in_four_throws=1-p_no_sixes_in_four_throws
+print('at least one six in four throws of a single die')
+print(paste('theory:',p_at_least_one_six_in_four_throws))
+
+p_no_double_sixes_in_twentyfour_throws = (35/36)**24
+p_at_least_one_double_six_in_twentyfour_throws=1-p_no_double_sixes_in_twentyfour_throws
+print('at least one double-six in 24 throws')
+print(paste('theory:',p_at_least_one_double_six_in_twentyfour_throws))
+
+```
+
 Let's start by simulating it.  We will first create functions that will generate throws of either one or two dice. 
 
 ```{r}
@@ -64,7 +79,7 @@ simChevalierTwo = function(nTrials=10000){
 
 ```
 
-Now let's compute the probabilities using probability theory and compare the results to those obtained using the simulation.
+Now let's compare the probabilities obtained using probability theory with those obtained using the simulation.
 
 ```{r}
 p_no_sixes_in_four_throws = (5/6)**4
@@ -86,19 +101,26 @@ print(paste('simulation:',twoDie))
 
 ### Conditional probabilities
 
-Let's use NHANES to look at some examples of conditional probability.
-
-First, let's figure out the probability of living in a house with less than 4 rooms.
+Let's use NHANES to look at some examples of conditional probability.  First let's create a cleaned up
+version of the NHANES data frame, called NHANES_clean, that will not have any missing values for the variables we care about.
 
 ```{r}
-pSmallHouse=mean(NHANES$HomeRooms<4,na.rm=TRUE)
+NHANES_clean = NHANES %>% select(HomeRooms,HHIncomeMid) %>% drop_na()
+```
+
+
+
+Now let's figure out the probability of living in a house with less than 4 rooms.
+
+```{r}
+pSmallHouse=mean(NHANES_clean$HomeRooms<4)
 pSmallHouse
 ```
 
 Now let's see the probability of household income less than $20,000.
 
 ```{r}
-pLowIncome=mean(NHANES$HHIncomeMid<20000,na.rm=TRUE)
+pLowIncome=mean(NHANES_clean$HHIncomeMid<20000)
 pLowIncome
 ```
 
@@ -114,7 +136,7 @@ So the conditional probility of living in a small house, given that one has a lo
 We can compute this as follows.  In order to get the joint probability of both having a small house and a low income, we can multiply together two boolean vectors for each of those conditions; the only values that will remain as TRUE (i.e. 1) are those that were true for both of the individual tests, since FALSE=0 and multiplying anything by zero turns it to zero.
 
 ```{r}
-pSmallHouseAndLowIncome=mean((NHANES$HomeRooms<4) * (NHANES$HHIncomeMid<20000),na.rm=TRUE)
+pSmallHouseAndLowIncome=mean((NHANES_clean$HomeRooms<4) * (NHANES_clean$HHIncomeMid<20000))
 pSmallHouseGivenLowIncome = pSmallHouseAndLowIncome/pLowIncome
 pSmallHouseGivenLowIncome
 ```
