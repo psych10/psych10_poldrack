@@ -1,0 +1,249 @@
+---
+title: "Probability basics"
+output: html_notebook
+---
+
+In this exercise we will go over probability computations in R, and also discuss some of the methods used in the tidyverse.
+
+First we load a number of packages that we need in order to do the exercise below.
+
+```{r}
+library(NHANES)
+library(tidyverse)
+library(assertthat)
+```
+
+### Basic probability calculations
+
+```{r}
+outcomes <- seq(1, 6)
+outcomes
+
+```
+
+```{r}
+outcome1isTrue <- outcomes == 1 
+outcome1isTrue
+
+```
+
+```{r}
+p1isTrue <- mean(outcome1isTrue)
+p1isTrue
+
+```
+
+```{r}
+outcomeIsEven <- !(outcomes %% 2)
+outcomeIsEven
+
+```
+
+```{r}
+pIsEven <- mean(outcomeIsEven)
+pIsEven
+
+pIsEvenByHand <- sum(outcomeIsEven) / length(outcomeIsEven)
+pIsEvenByHand
+
+pIsEven == pIsEvenByHand
+```
+
+
+### Working with data frames
+
+#### Making a data frame using tibble()
+It's best to work with "tibbles" instead of R's traditional `data.frame`." A tibble is a data frame but with some smart tweaks that make it easier to work with, expecially when using the tidyverse. See here for more information on  the function tibble(): https://r4ds.had.co.nz/tibbles.html
+
+```{r}
+# first create the individual variables
+n <- c("russ", "lucy", "jaclyn", "tyler")
+x <- c(1, 2, 3, 4)
+y <- c(4, 5, 6, 7)
+z <- c(7, 8, 9, 10)
+
+# create the data frame
+myDataFrame <-
+  tibble(
+    n, #list each of your columns in the order you want them
+    x,
+    y,
+    z
+  )
+
+myDataFrame
+```
+
+Take a quick look at the properties of the data frame us `glimpse()`:
+
+```{r}
+glimpse(myDataFrame) 
+```
+
+#### Selecting an element
+
+The first index refers to the row, the second to the column.
+
+```{r}
+myDataFrame[1, 2]
+
+myDataFrame[2, 3]
+```
+
+
+#### Selecting a row or column by name
+
+```{r}
+myDataFrame$x
+```
+
+#### Selecting a row or column by index
+
+```{r}
+myDataFrame[1, ]
+
+myDataFrame[, 1]
+```
+
+### Select a set of rows 
+
+```{r}
+myDataFrame %>% 
+  slice(1:2) 
+```
+`slice()` is a function that selects out rows based on their row number
+
+You will also notice something we haven't discussed before: %>%.  This is called a "pipe", which is commonly used within the tidyverse (which we will discuss more in the R lab on data wrangling); you can read more [here](http://magrittr.tidyverse.org/). A pipe takes the output from one command and feeds it as input to the next command. In this case, simply writing the name of the data frame (myDataFrame) causes it to be input to the slice() command following the pipe. The benefit of pipes will become especially apparent when we want to start stringing together multiple functions into a single command.
+
+In this example, no new variable is created - the output is printed to the screen, just like it would be if you typed the name of the variable.  If you wanted to save it to a new variable, you would use the <- assignment operator, like this:
+
+```{r}
+myDataFrameSlice <- myDataFrame %>% 
+  slice(1:2) 
+
+myDataFrameSlice
+
+```
+
+
+### Select a set of rows based on specific value(s)
+```{r}
+myDataFrame %>% 
+  filter(n == "russ")
+
+myDataFrame %>% 
+  filter(n == "russ" | n == "lucy") # | indicates "or"
+```
+`filter()` is a function that retains only those rows that meet your stated criteria
+
+### Select a set of columns
+```{r}
+myDataFrame %>% 
+  select(x:y)
+```
+`select()` is a function that selects out only those columns you specify using their names
+
+#### adding a row or column
+
+add a named row
+
+```{r}
+tiffanyDataFrame <-
+  tibble(
+    n = "tiffany",
+    x = 13,
+    y = 14,
+    z = 15
+  )
+
+myDataFrame %>% 
+  bind_rows(tiffanyDataFrame)
+```
+`bind_rows()` is a function that combines the rows from another dataframe to the current dataframe 
+
+add a named column.  
+
+```{r}
+myDataFrame <- 
+  myDataFrame %>%
+  mutate(total = x + y + z)
+
+myDataFrame
+```
+
+mutate() is a function that creates a new variable in a data frame using the existing variables.  In this case, it creates a variable called total that is the sum of the existing variables x, y, and z.
+
+
+Remove a column using the select() function
+
+```{r}
+myDataFrame <- 
+  myDataFrame %>%
+  select(-total)
+
+myDataFrame
+```
+
+
+### Conditional probabilities
+
+Let's determine the conditional probability of someone being unhealthy, given that they are over 70 years of age, using the NHANES dataset.
+
+```{r}
+healthDf <-
+  NHANES %>%
+  mutate(
+    Over70 = Age > 70,
+    Unhealthy = DaysPhysHlthBad > 0
+  ) %>%
+  select(Unhealthy, Over70) %>%
+  drop_na()
+
+glimpse(healthDf)
+```
+
+First, what's the probability of being over 70?
+```{r}
+pOver70 <- 
+  healthDf %>%
+  count(Over70) %>%
+  mutate(p = n / sum(n))
+
+pOver70
+```
+
+`count` is a function that counts the number of values for each group of values in a variable; this will create a new dataframe with the grouping variable (i.e., Over70) and the "n" (number) of values for each group (> 70 or not). 
+
+Second, what's the probability of being unhealthy?
+```{r}
+pUnhealthy <- 
+  healthDf %>%
+  count(Unhealthy) %>%
+  mutate(p = n / sum(n))
+
+pUnhealthy
+```
+
+What's the probability for being each combination of unhealthy/health and over 70/ not. 
+```{r}
+pBoth <- healthDf %>% 
+  count(Unhealthy, Over70) %>% 
+  table() %>%
+  prop.table()
+
+pBoth
+```
+
+#Finally, probability of someone being unhealthy, given that they are over 70 years of age
+```{r}
+pOver70givenUnhealthy <-
+  healthDf %>%
+  filter(Unhealthy == TRUE) %>%
+  count(Over70) %>%
+  mutate(p = n / sum(n))
+
+pOver70givenUnhealthy
+
+# 
+```
+
