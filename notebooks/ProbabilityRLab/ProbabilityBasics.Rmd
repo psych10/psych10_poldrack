@@ -10,10 +10,9 @@ First we load a number of packages that we need in order to do the exercise belo
 ```{r}
 library(NHANES)
 library(tidyverse)
-library(assertthat)
 ```
 
-### Basic probability calculations
+## Basic probability calculations
 
 ```{r}
 outcomes <- seq(1, 6)
@@ -50,9 +49,10 @@ pIsEven == pIsEvenByHand
 ```
 
 
-### Working with data frames
+## Working with data frames
 
-#### Making a data frame using tibble()
+### Making a data frame using tibble()
+
 It's best to work with "tibbles" instead of R's traditional `data.frame`." A tibble is a data frame but with some smart tweaks that make it easier to work with, expecially when using the tidyverse. See here for more information on  the function tibble(): https://r4ds.had.co.nz/tibbles.html
 
 ```{r}
@@ -80,7 +80,7 @@ Take a quick look at the properties of the data frame us `glimpse()`:
 glimpse(myDataFrame) 
 ```
 
-#### Selecting an element
+### Selecting an element
 
 The first index refers to the row, the second to the column.
 
@@ -90,14 +90,13 @@ myDataFrame[1, 2]
 myDataFrame[2, 3]
 ```
 
-
-#### Selecting a row or column by name
+### Selecting a row or column by name
 
 ```{r}
 myDataFrame$x
 ```
 
-#### Selecting a row or column by index
+### Selecting a row or column by index
 
 ```{r}
 myDataFrame[1, ]
@@ -111,6 +110,7 @@ myDataFrame[, 1]
 myDataFrame %>% 
   slice(1:2) 
 ```
+
 `slice()` is a function that selects out rows based on their row number
 
 You will also notice something we haven't discussed before: %>%.  This is called a "pipe", which is commonly used within the tidyverse (which we will discuss more in the R lab on data wrangling); you can read more [here](http://magrittr.tidyverse.org/). A pipe takes the output from one command and feeds it as input to the next command. In this case, simply writing the name of the data frame (myDataFrame) causes it to be input to the slice() command following the pipe. The benefit of pipes will become especially apparent when we want to start stringing together multiple functions into a single command.
@@ -125,8 +125,8 @@ myDataFrameSlice
 
 ```
 
-
 ### Select a set of rows based on specific value(s)
+
 ```{r}
 myDataFrame %>% 
   filter(n == "russ")
@@ -134,6 +134,7 @@ myDataFrame %>%
 myDataFrame %>% 
   filter(n == "russ" | n == "lucy") # | indicates "or"
 ```
+
 `filter()` is a function that retains only those rows that meet your stated criteria
 
 ### Select a set of columns
@@ -141,9 +142,10 @@ myDataFrame %>%
 myDataFrame %>% 
   select(x:y)
 ```
+
 `select()` is a function that selects out only those columns you specify using their names
 
-#### adding a row or column
+### adding a row or column
 
 add a named row
 
@@ -159,9 +161,10 @@ tiffanyDataFrame <-
 myDataFrame %>% 
   bind_rows(tiffanyDataFrame)
 ```
+
 `bind_rows()` is a function that combines the rows from another dataframe to the current dataframe 
 
-add a named column.  
+### add a named column.  
 
 ```{r}
 myDataFrame <- 
@@ -174,7 +177,7 @@ myDataFrame
 mutate() is a function that creates a new variable in a data frame using the existing variables.  In this case, it creates a variable called total that is the sum of the existing variables x, y, and z.
 
 
-Remove a column using the select() function
+### Remove a column using the select() function
 
 ```{r}
 myDataFrame <- 
@@ -184,13 +187,12 @@ myDataFrame <-
 myDataFrame
 ```
 
-
-### Conditional probabilities
+## Conditional probabilities
 
 Let's determine the conditional probability of someone being unhealthy, given that they are over 70 years of age, using the NHANES dataset.
 
 ```{r}
-healthDf <-
+healthDataFrame <-
   NHANES %>%
   mutate(
     Over70 = Age > 70,
@@ -199,51 +201,58 @@ healthDf <-
   select(Unhealthy, Over70) %>%
   drop_na()
 
-glimpse(healthDf)
+glimpse(healthDataFrame)
 ```
 
 First, what's the probability of being over 70?
-```{r}
-pOver70 <- 
-  healthDf %>%
-  count(Over70) %>%
-  mutate(p = n / sum(n))
 
-pOver70
+```{r}
+pOver70DataFrame <- 
+  healthDataFrame %>%
+  count(Over70) %>%
+  mutate(p = n / sum(n)) %>%
+  filter(Over70 == TRUE)
+
+# to obtain the specific vaule, we need to extract it from the data frame
+
+pOver70DataFrame$p
 ```
 
 `count` is a function that counts the number of values for each group of values in a variable; this will create a new dataframe with the grouping variable (i.e., Over70) and the "n" (number) of values for each group (> 70 or not). 
 
 Second, what's the probability of being unhealthy?
+
 ```{r}
-pUnhealthy <- 
+pUnhealthyDataFrame <- 
   healthDf %>%
   count(Unhealthy) %>%
-  mutate(p = n / sum(n))
+  mutate(p = n / sum(n)) %>%
+  filter(Unhealthy == TRUE)
 
-pUnhealthy
+pUnhealthyDataFrame$p
 ```
 
-What's the probability for being each combination of unhealthy/health and over 70/ not. 
+What's the probability for each combination of unhealthy/healthly and over 70/ not. 
+
 ```{r}
-pBoth <- healthDf %>% 
+pBothDataFrame <- healthDf %>% 
   count(Unhealthy, Over70) %>% 
-  table() %>%
-  prop.table()
+  mutate(p = n/sum(n))
 
-pBoth
+pBothDataFrame
 ```
 
-#Finally, probability of someone being unhealthy, given that they are over 70 years of age
+Finally, what's the probability of someone being unhealthy, given that they are over 70 years of age?
+
 ```{r}
-pOver70givenUnhealthy <-
+pOver70givenUnhealthyDataFrame <-
   healthDf %>%
   filter(Unhealthy == TRUE) %>%
   count(Over70) %>%
-  mutate(p = n / sum(n))
+  mutate(p = n / sum(n)) %>%
+  filter(Over70 == TRUE)
 
-pOver70givenUnhealthy
+pOver70givenUnhealthyDataFrame$p
 
-# 
 ```
 
