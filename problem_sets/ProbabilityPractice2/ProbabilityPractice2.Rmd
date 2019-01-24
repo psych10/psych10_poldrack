@@ -1,0 +1,143 @@
+---
+title: "conditional probability in R"
+output: html_notebook
+---
+
+This notebook is meant to give additional practice in computing conditional probabilities in R.
+
+```{r}
+library(tidyverse)
+```
+
+## Election example from class (Session 5)
+
+First we will transcribe the data from Slide 7 into a data frame.
+
+```{r}
+
+electionDf <- tibble(party = c('D','D','D','D','D','D','D','D','D','R','R','R','R','R','R','R','R','R'),               vote=c('Clinton','Clinton','Clinton','Clinton','Clinton','Clinton','Clinton','Clinton','Trump','Trump','Trump','Trump','Trump','Trump','Trump','Trump','Trump','Trump'))
+
+glimpse(electionDf)
+```
+
+Compute the simple probability of being a Republican.  Note that here we refer to the party
+
+```{r}
+# create a logical variable for whether each individual
+# is a republican
+
+isRepublican <- electionDf$party == 'R'
+
+# compute the probability of being a Republican overall
+
+pRepublican <- mean(isRepublican)
+
+pRepublican
+```
+
+Now compute the probability of being a Democrat.  There are two different ways to do this.  One is to do exactly what we did for Republicans above.
+
+```{r}
+
+isDemocrat <- electionDf$party == 'D'
+
+# compute the probability of being a Republican overall
+
+pDemocrat <- mean(isDemocrat)
+
+pDemocrat
+```
+
+However, remember that probabilities must sum to 1 over the sample space.  Because there are only two possible outcomes (R or D), that means that the P(R) = 1 - P(D)
+
+```{r}
+pDemocrat <- 1 - pRepublican
+
+pDemocrat
+```
+
+We can similarly compute the overall probability of voting for either candidate.
+
+```{r}
+pClinton <- mean(electionDf$vote == 'Clinton')
+pClinton
+
+pTrump <- 1 - pClinton
+pTrump
+```
+
+Now let's compute the conditional probability of being a Clinton voter, given that one is a Democrat:
+
+$$
+P(Clinton | Democrat) = \frac{P(Clinton \cap Democrat)}{P(Democrat)}
+$$
+
+There are two ways we could do this.  One is to compute the top part of the equation, since we have already computed the bottom part.  
+
+```{r}
+isClintonAndDemocrat <- electionDf$party == 'D' & electionDf$vote == 'Clinton'
+pClintonAndDemocrat <- mean(isClintonAndDemocrat)
+
+pClintonAndDemocrat
+
+```
+
+
+```{r}
+pClintonGivenDemocrat <- pClintonAndDemocrat/pDemocrat
+pClintonGivenDemocrat
+
+```
+
+We can also compute this a different way.  Remember that what we are doing when we compute a conditional probability is that we are limiting our computation of the probability to only the cases that match the "given that" part of the probability.  In this case, we want to know the probability of being a Clinton voter given that one is a Democrat, which we can compute by first limiting our data to only those who are Democrats.
+
+```{r}
+democratDf <- electionDf %>%
+  subset(party == 'D')
+
+glimpse(democratDf)
+```
+
+We see that this new data frame includes only those 9  individuals who are Democrats.  Now we can compute the probability that these people were Clinton voters.  Let's walk through the logic of this by first applying the same math that we used above.
+
+Since we have limited the data to only include democrats, then P(Democrat) should be equal to one.
+
+```{r}
+mean(democratDf$party == 'D')
+
+```
+
+Now let's compute the quantity for the numerator in the equation; that is, P(Clinton and Democrat).
+
+```{r}
+
+# p(Clinton) within the democrat data frame
+mean(democratDf$vote == 'Clinton' & democratDf$party == 'D')
+
+```
+
+Note that this is exactly the same as the probability of being a Clinton voter on its own within the Democrat data frame, since the second half (party =='D') will be true for everyone in this data frame.
+
+```{r}
+pClintonGivenDemocrat <- mean(democratDf$vote == 'Clinton')
+pClintonGivenDemocrat
+```
+
+## Bayes' rule
+
+Let's say that we want to know the probability of being a Democrat, given that one voted for Clinton  That is, if you know that one of these people voted for Clinton, how certain can be that they are a Democrat?  We can compute this using Bayes' rule.
+
+$$
+P(Democrat | Clinton) = \frac{P(Clinton|Democrat)*P(Democrat)}{P(Clinton)}
+$$
+
+We can compute this using the probabilities that we computed previously, plugging them into Bayes' rule.
+
+```{r}
+pDemocratGivenClinton <- (pClintonGivenDemocrat*pDemocrat)/pClinton
+pDemocratGivenClinton
+```
+
+This value should make sense from looking at the slide; if we only look at the Clinton voters, we can see that they are all democrats.  Thus, knowing that one of the people voted for Clinton tells us that we can be certain that they are a Democrat. 
+
+
