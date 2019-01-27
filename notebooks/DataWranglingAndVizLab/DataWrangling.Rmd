@@ -27,7 +27,7 @@ The Attitudes Toward Course subscale consists of the following 9 items:
 
 For our purposes, we will just combine all 29 items together, rather than separating them into these subscales.
 
-Note: I have removed the data from the  graduate students 5+ year students, since those would be too easily identifiable given how few there are.
+Note: I have removed the data from the graduate students and 5+ year students, since those would be too easily identifiable given how few there are.
 
 Let's first save the file path to the data. 
 
@@ -49,9 +49,11 @@ Right now the variable names are unwieldy, since they include the entire name of
 ```{r}
 nQuestions <- 29 # other than the first two columns, the rest of the columns are for the 29 questions in the statistics attitude survey; we'll use this below to rename these columns based on their question number
 
+# use rename to change the first two column names
+# rename can refer to columns either by their number or their name
 attitudeData <-
   attitudeData %>% 
-  rename(
+  rename(     # rename using columm numbers
     Year = 1, # The first column is the year 
     StatsBefore = 2 # The second column indicates whether the person took stats before
   ) %>% 
@@ -121,6 +123,21 @@ attitudeDataNoNA <-
 glimpse(attitudeDataNoNA)
 ```
 
+Try the following on your own:  Using the attitudeData data frame, drop the NA values, create a  new variable called mystery that contains a value of 1 for anyone who answered 7 to question ats4 ("Statistics seems very mysterious to me"). Create a summary that includes the number of people reporting 7 on this question, and the proportion of people who reported 7.
+
+
+```{r}
+meanRawSummary <- 
+  _____ %>% # take the original data frame
+  _____() %>%   # drop NA values
+  _____(_____) %>%  # create new mystery variable within the data frame
+  _____(______,# compute the number of the 7 ratings
+        ______)  # compute the proportion
+  
+meanRawSummary
+
+```
+
 #### Tidy data
 These data are in a format that meets the principles of ["tidy data"](http://r4ds.had.co.nz/tidy-data.html), which state the following:
 
@@ -134,12 +151,13 @@ This is shown graphically the following figure (from Hadley Wickham, developer o
 
 In our case, each column represents a variable: `ID` identifies which student responded, `Year` contains their year at Stanford, `StatsBefore` contains whether or not they have taken statistics before, and ats1 through ats29 contain their responses to each item on the ATS scale. Each observation (row) is a response from one individual student. Each value has its own cell (e.g., the values for `Year` and `StatsBefoe` are stored in separate cells in separate columns).
 
-For an example of data that are NOT tidy, take a look at these data [Belief in Hell](http://www.pewforum.org/religious-landscape-study/belief-in-hell/#generational-cohort).
+For an example of data that are NOT tidy, take a look at these data [Belief in Hell](http://www.pewforum.org/religious-landscape-study/belief-in-hell/#generational-cohort) - click on the "Table" tab to see the data.
+
 - What are the variables
 - Why aren't these data tidy?
 
 #### Recoding data 
-We now have tidy data; however, some of the ATS items require recoding. Specifically, some of the items need to be "reverse coded"; these items include: ats2, ats4, ats6, ats7, ats10, ats12, ats14, ats15, ats16, ats18, ats20, ats25, ats27 and ats28. The raw responses for each tiem on the 1-7 scale; therefore, for the reverse coded items, we need to reverse them by subtracting the raw score from 8 (such that 7 becomes 1 and 1 becomes 7). To recode these items, we will use the tidyverse `mutate()` function. It's a good idea when recoding to preserve the raw original variables and create new recoded variables with different names.
+We now have tidy data; however, some of the ATS items require recoding. Specifically, some of the items need to be "reverse coded"; these items include: ats2, ats4, ats6, ats7, ats10, ats12, ats14, ats15, ats16, ats18, ats20, ats25, ats27 and ats28. The raw responses for each item are on the 1-7 scale; therefore, for the reverse coded items, we need to reverse them by subtracting the raw score from 8 (such that 7 becomes 1 and 1 becomes 7). To recode these items, we will use the tidyverse `mutate()` function. It's a good idea when recoding to preserve the raw original variables and create new recoded variables with different names.
 
 There are two ways we can use `mutate()` function to recode these variables. The first way is easier to understand as a new code, but less efficient and more prone to error. Specifically, we repeat the same code for every variable we want to reverse code as follows:
 
@@ -208,6 +226,7 @@ attitudeDataNoNA %>%
 ```
 
 Let's also make sure that there are no responses outside of the 1-7 scale that we expect, and make sure that no one specified a year outside of the 1-4 range.
+
 ```{r}
 attitudeDataNoNA %>% 
   summarise_at(
