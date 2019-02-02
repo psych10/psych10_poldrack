@@ -5,60 +5,194 @@ output:
     df_print: paged
 ---
 
+# Environment set up
 ```{r}
+#Libraries
 library(tidyverse)
-respData=read.table('https://raw.githubusercontent.com/psych10/psych10/master/exercises/memoryRecall/Memory%20recall%20test.csv',header=TRUE,sep=',',
-             stringsAsFactors = FALSE)
+
+#File paths
+respData_path <- "https://raw.githubusercontent.com/psych10/psych10/master/exercises/memoryRecall/Memory%20recall%20test.csv"
 ```
 
+# Read in data 
 ```{r}
-respData$nRecalled=NULL
-respData$nHits=0
+respData <- 
+  read_csv(respData_path) %>% 
+  mutate(
+    nRecalled = NULL,
+    nHits = 0
+  )
+```
 
+## Analyze
+```{r}
 # last item in this list is the DRM critical lure
 
-listWords=c('fear','temper','hatred','fury','happy',
-            'enrage','emotion','rage','hate','mean',
-            'ire','mad','wrath','fight','anger')
+listWords <- c(
+  "fear", "temper", "hatred", "fury", "happy",
+  "enrage", "emotion", "rage", "hate", "mean",
+  "ire", "mad", "wrath", "fight", "anger"
+)
 
-itemData=c()
+itemData <- c()
 
-for (i in 1:dim(respData)[1]){
-  split_resp=strsplit(tolower(respData[i,2]),' ')[[1]]
-  respData$nRecalled[i]=length(split_resp)
-  
-  for (j in 1:length(listWords)){
-    itemData=rbind(itemData,c(j,as.integer(listWords[j] %in% split_resp)))
+for (i in 1:dim(respData)[1]) {
+  split_resp <- strsplit(tolower(respData[i, 2]), " ")[[1]]
+  respData$nRecalled[i] <- length(split_resp)
+
+  for (j in 1:length(listWords)) {
+    itemData <- rbind(itemData, c(j, as.integer(listWords[j] %in% split_resp)))
   }
 }
-itemDataDf=as.data.frame(itemData)
-names(itemDataDf)=c('position','hit')
+
+itemDataDf <- as.data.frame(itemData)
+names(itemDataDf) <- c("position", "hit")
 ```
 
-Plot serial position curve
-
+# Summarize the data in order to plot it
 ```{r}
-source('summarySE.R')
-sm=summarySE(itemDataDf, 
-             measurevar="hit", groupvars=c("position"))
+#create a dataframe that summarizes the hit rates for each word
+sm <- 
+  itemDataDf %>% 
+  group_by(position) %>% 
+  summarize(
+    n = n(),
+    mean_hit = mean(hit),
+    sd_hit = sd(hit),
+    se_hit = sd_hit / sqrt(n)
+  )
+  
+#add a new variable specify whether each word was or was not the lure 
+itemDataDf <- 
+  itemDataDf %>%
+  mutate(
+    lure = as.integer(
+      position == length(listWords)
+    )
+  )
 
-itemDataDf <- itemDataDf %>%
-  mutate(lure = as.integer(position==length(listWords)))
-
-lureHitRate = mean(itemDataDf$hit[itemDataDf$lure==TRUE])
-
-
-ggplot(subset(sm,position<length(listWords)),aes(x=position,y=hit)) +
-  geom_line() + 
-  geom_hline(yintercept=lureHitRate,color='blue') + 
-  ylim(0,1) + ylab('Proportion correct recall') + 
-  xlab('Serial position of item in list') +
-  annotate('text',label = "hit rate for lure ('anger')", x = 7, y = lureHitRate*0.85, colour = "blue") + 
-  scale_x_continuous(breaks=1:(length(listWords)-1),
-                   labels=listWords[1:(length(listWords)-1)]) +
-  theme(axis.text.x  = element_text(angle=90, size=12,vjust=0.5))
-
+#calculate the mean hit rate for the lure
+lureHitRate <- 
+  itemDataDf %>% 
+  filter(lure == 1) %>% 
+  summarize(
+    lureHitRate = mean(hit)
+  ) %>% 
+  pull() #pull() saves "lureHitRate" to a single value rather than keeping it in a dataframe
 ```
 
+#Plot serial position curve
 
+## Method 1
+Basic plot without word label information. 
+```{r}
+sm %>% 
+  filter(position < length(listWords)) %>% 
+  ggplot(aes(x = position, y = mean_hit)) + 
+  geom_line() +
+  geom_hline(yintercept = lureHitRate, color = "blue") +
+  scale_x_continuous(breaks = 1:14) +
+  ylim(0, 1) +
+  annotate(
+    "text", 
+    label = "hit rate for lure ('anger')", 
+    x = 7, 
+    y = lureHitRate * 0.85, 
+    colour = "blue"
+  ) +
+  labs(
+    x = "Serial position of item in list",
+    y = "Proportion correct recall"
+  )
+```
 
+## Method 2
+Use `scale_x_continuous` to replace the numbers with the words on the x-axis.
+```{r}
+sm %>% 
+  filter(position < length(listWords)) %>% 
+  ggplot(aes(x = position, y = mean_hit)) + 
+  geom_line() +
+  geom_hline(yintercept = lureHitRate, color = "blue") +
+  scale_x_continuous(
+    breaks = 1:(length(listWords) - 1), #create a sequence of breaks of length 14 (because not plotting the lure ord "anger" on the x-axis)
+    labels = listWords[1:(length(listWords) - 1)]
+  ) + 
+  ylim(0, 1) +
+  annotate(
+    "text", 
+    label = "hit rate for lure ('anger')", 
+    x = 7, 
+    y = lureHitRate * 0.85, 
+    colour = "blue"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 90, size = 12, vjust = 0.5)
+  ) +
+  labs(
+    x = "Serial position of item in list",
+    y = "Proportion correct recall"
+  )
+```
+
+## Method 3
+Use `geom_text` to add the words as labels to the points. 
+```{r}
+sm %>% 
+  filter(position < length(listWords)) %>% 
+  ggplot(aes(x = position, y = mean_hit)) + 
+  geom_line() +
+  geom_hline(yintercept = lureHitRate, color = "blue") +
+  geom_label(
+    label = listWords[1:(length(listWords) - 1)]
+  ) +
+  scale_x_continuous(
+    breaks = 1:14
+  ) + 
+  ylim(0, 1) +
+  annotate(
+    "text", 
+    label = "hit rate for lure ('anger')", 
+    x = 9, 
+    y = lureHitRate * 0.85, 
+    colour = "blue"
+  ) +
+  labs(
+    x = "Serial position of item in list",
+    y = "Proportion correct recall"
+  )
+```
+
+## Method 4
+The functions in the additional package `ggrepel` sometimes do a bit better of a job positioning the labels for you.  There are also arguments for both `geom_text` and `geom_label_repel` than can nudge the position of the labels. 
+
+We've also added `geom_point` here to make things a bit clearer.
+```{r}
+#install.packages("ggrepel")
+library(ggrepel)
+
+sm %>% 
+  filter(position < length(listWords)) %>% 
+  ggplot(aes(x = position, y = mean_hit)) + 
+  geom_point() +
+  geom_line() +
+  geom_hline(yintercept = lureHitRate, color = "blue") +
+  geom_label_repel(
+    label = listWords[1:(length(listWords) - 1)]
+  ) +
+  scale_x_continuous(
+    breaks = 1:14
+  ) + 
+  ylim(0, 1) +
+  annotate(
+    "text", 
+    label = "hit rate for lure ('anger')", 
+    x = 9, 
+    y = lureHitRate * 0.85, 
+    colour = "blue"
+  ) +
+  labs(
+    x = "Serial position of item in list",
+    y = "Proportion correct recall"
+  )
+```
