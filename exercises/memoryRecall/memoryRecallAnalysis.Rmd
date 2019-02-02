@@ -164,7 +164,7 @@ sm %>%
 ```
 
 ## Method 4
-The functions in the additional package `ggrepel` sometimes do a bit better of a job positioning the labels for you.  There are also arguments for both `geom_text` and `geom_label_repel` than can nudge the position of the labels. 
+The functions in the additional package `ggrepel` sometimes do a bit better of a job positioning the labels for you.  There are also arguments for both `geom_label` and `geom_label_repel` than can nudge the position of the labels. 
 
 We've also added `geom_point` here to make things a bit clearer.
 ```{r}
