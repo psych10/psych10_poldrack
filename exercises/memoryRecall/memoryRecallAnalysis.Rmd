@@ -115,7 +115,7 @@ sm %>%
   geom_line() +
   geom_hline(yintercept = lureHitRate, color = "blue") +
   scale_x_continuous(
-    breaks = 1:(length(listWords) - 1), #create a sequence of breaks of length 14 (because not plotting the lure ord "anger" on the x-axis)
+    breaks = 1:(length(listWords) - 1), #create a sequence of breaks of length 14 (because not plotting the lure word "anger" on the x-axis)
     labels = listWords[1:(length(listWords) - 1)]
   ) + 
   ylim(0, 1) +
@@ -143,7 +143,7 @@ sm %>%
   ggplot(aes(x = position, y = mean_hit)) + 
   geom_line() +
   geom_hline(yintercept = lureHitRate, color = "blue") +
-  geom_label(
+  geom_label( #new
     label = listWords[1:(length(listWords) - 1)]
   ) +
   scale_x_continuous(
@@ -177,7 +177,7 @@ sm %>%
   geom_point() +
   geom_line() +
   geom_hline(yintercept = lureHitRate, color = "blue") +
-  geom_label_repel(
+  geom_label_repel( #new
     label = listWords[1:(length(listWords) - 1)]
   ) +
   scale_x_continuous(
