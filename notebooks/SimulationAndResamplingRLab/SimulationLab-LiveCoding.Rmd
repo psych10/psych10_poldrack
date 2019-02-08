@@ -45,6 +45,10 @@ mySampleDf %>%
 Multiply the data by 2 and see how it affects the mean and standard deviation
 
 ```{r}
+mySampleDf %>% 
+  mutate(samples = samples*2) %>%
+  summarise(myMean = mean(samples),
+            mySd = sd(samples))
 
 
 ```
