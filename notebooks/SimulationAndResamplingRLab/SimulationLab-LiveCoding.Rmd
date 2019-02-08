@@ -104,11 +104,15 @@ testDataMean
 Compute the sum of squared errors from each of the data points.
 
 ```{r}
+# THIS IS BAD FORM!
+
 sse1 <- sum((testData[1] - testData)^2)
 
 sse2 <- sum((testData[2] - testData)^2)
 
 sse3 <- sum((testData[3] - testData)^2)
+
+sse4 <- sum((testData[4] - testData)^2)
 
 ```
 
@@ -116,6 +120,7 @@ Compute the sum of squared errors from the mean
 
 ```{r}
 
+sseMean <- sum((testDataMean - testData)^2)
 ```
 
 
