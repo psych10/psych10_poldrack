@@ -13,7 +13,14 @@ set.seed(12345)
 1. Generate 1000 random samples from a normal distribution with a mean of 100 and a standard deviation of 10
 
 ```{r}
+mySamples <- rnorm(1000,mean = 100, sd = 10)
+mySampleDf <- tibble(samples = mySamples)
+```
 
+Show the histogram of the data.
+
+```{r}
+ggplot(mySampleDf,a)
 ```
 
 Compute the mean and standard deviation of those data
