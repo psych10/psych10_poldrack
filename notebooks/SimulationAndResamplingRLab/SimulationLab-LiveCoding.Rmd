@@ -129,7 +129,9 @@ sseMean <- sum((testDataMean - testData)^2)
 Generate a random sample of size 10,000 with a mean of zero and a standard deviation of 1.
 
 ```{r}
-
+myNormalSamples <- rnorm(10000)
+myNormalSamplesDf <- tibble(
+  samples = myNormalSamples)
 ```
 
 
