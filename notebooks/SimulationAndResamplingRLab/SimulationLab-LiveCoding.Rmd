@@ -35,6 +35,10 @@ mySampleDf %>%
 Add 10 to the data and see how it affects the mean and standard deviation.
 
 ```{r}
+mySampleDf %>% 
+  mutate(samples = samples + 10) %>%
+  summarise(myMean = mean(samples),
+            mySd = sd(samples))
 
 ```
 
