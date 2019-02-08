@@ -75,12 +75,16 @@ unique(myIntegerSampleNoReplace)
 Take a sample of size 30 from the dataset, without replacement.
 
 ```{r}
+myIntegerSampleNoReplace <- myIntegerDf %>%
+  sample_n(30,replace = FALSE)
 
 ```
 
 Take a sample of 30 from the dataset, with replacement.
 
 ```{r}
+myIntegerSampleWithReplace <- myIntegerDf %>%
+  sample_n(30,replace = TRUE)
 
 ```
 
