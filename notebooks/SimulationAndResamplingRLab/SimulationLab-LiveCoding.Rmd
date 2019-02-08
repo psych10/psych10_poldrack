@@ -20,13 +20,16 @@ mySampleDf <- tibble(samples = mySamples)
 Show the histogram of the data.
 
 ```{r}
-ggplot(mySampleDf,a)
+ggplot(mySampleDf,aes(samples)) +
+  geom_histogram(bins=10)
 ```
 
 Compute the mean and standard deviation of those data
 
 ```{r}
-
+mySampleDf %>% 
+  summarise(myMean = mean(samples),
+            mySd = sd(samples))
 ```
 
 Add 10 to the data and see how it affects the mean and standard deviation.
