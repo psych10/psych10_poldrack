@@ -105,6 +105,10 @@ Compute the sum of squared errors from each of the data points.
 
 ```{r}
 # THIS IS BAD FORM!
+# It violates the "Don't repeat yourself!" rule
+# in addition, we should never put an index into the name
+# of a variable.  Instead, we should put the values into
+# a vector or data frame so they can be indexed directly
 
 sse1 <- sum((testData[1] - testData)^2)
 
@@ -113,6 +117,25 @@ sse2 <- sum((testData[2] - testData)^2)
 sse3 <- sum((testData[3] - testData)^2)
 
 sse4 <- sum((testData[4] - testData)^2)
+
+print(c(sse1,sse2,sse3,sse4))
+
+# better way to do it: use a for loop
+
+ssevals <- array(dim=length(testData))
+
+for (i in 1:length(testData)){
+  ssevals[i] <- sum((testData[i] - testData)^2)
+}
+
+print(ssevals)
+
+# an even better way to do it: sapplly
+
+ssevals <- sapply(1:4,function(x) sum((x - testData)**2))
+
+print(ssevals)
+
 
 ```
 
@@ -232,6 +255,8 @@ ggplot(myUniformSamplesDf,aes(samples)) +
 Adapt the function from the previous section to use a uniform distribution instead of a normal.
 
 ```{r}
+# here we add a new argument, myRand, which contains as its value the name of the
+# function that we want to use to generate random numbers
 
 mySampleMean <- function(sampleSize,myRand = runif){
   mySample <- myRand(sampleSize)
@@ -243,6 +268,7 @@ mySampleMean <- function(sampleSize,myRand = runif){
 Run the function 1000 times and plot the histogram of the resulting means.  Try changing the sample size and see how this affects the shape of the sampling distribution.
 
 ```{r}
+
 myResults <- replicate(1000,mySampleMean(30,myRand = runif))
 
 myResultsDf <- 
@@ -275,7 +301,45 @@ myCI
 
 Using the same data as previous problem, compute the 95 percent confidence interval for the mean using bootstrapping.  
 
+Here we write the bootstrap function ourselves.
+
 ```{r}
+# take in a df and return the mean computed on a sample with replacement
+resampleMean <- function(df){
+  sampleDf <- df %>%
+    sample_n(nrow(df),replace=TRUE)
+  return(mean(sampleDf$samples))
+}
+
+# perform this 1000 times
+
+bsResults <- replicate(1000,resampleMean(mySampleDf))
+
+# get the 2.5 and 97.5 percent quantiles.
+
+bootCI <- quantile(bsResults,c(0.0275,0.975))
+print(bootCI)
+```
+
+
+We could also do this using the built-in `boot()` function from R. It's a bit tricky as it requires us to build a function do compute our statistic on the resampled data.
+
+```{r}
+# example based on code from 
+# https://uoftcoders.github.io/studyGroup/lessons/r/resampling/lesson/
+
+library(boot)
+
+# Create a function to take a resample of the values, 
+# and then calculate the mean
+boot_mean <- function(original_vector, resample_vector) {
+    mean(original_vector[resample_vector])
+}
+
+# R is number of replications
+mean_results <- boot(mySampleDf$samples, boot_mean, R = 2000)
+ci <- boot.ci(mean_results,type='basic')
+print(ci)
 
 ```
 
