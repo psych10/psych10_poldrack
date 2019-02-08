@@ -32,6 +32,7 @@ Multiply the data by 2 and see how it affects the mean and standard deviation
 
 ```{r}
 
+
 ```
 
 ## 2. Sampling with and without replacement
