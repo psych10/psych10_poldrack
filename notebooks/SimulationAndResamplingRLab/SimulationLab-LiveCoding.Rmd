@@ -36,7 +36,7 @@ Multiply the data by 2 and see how it affects the mean and standard deviation
 
 ## 2. Sampling with and without replacement
 
-Generate a set of 10 random integers between 0 and 20, using a uniform distribution.
+Generate a set of 10 unique random integers between 0 and 20, using a uniform distribution.
 
 ```{r}
 
