@@ -260,6 +260,14 @@ Using the sample from section 1, compute the 95 percent confidence interval for 
 
 ```{r}
 
+myCI <- mySampleDf %>%
+  summarize(myMean = mean(samples),
+            mySEM = sd(samples)/sqrt(n()),
+            lower_quantile = qnorm(0.025),
+            upper_quantile = qnorm(0.975),
+            lower_CI = myMean + lower_quantile*mySEM,
+            upper_CI = myMean + upper_quantile*mySEM)
+myCI
 ```
 
 
