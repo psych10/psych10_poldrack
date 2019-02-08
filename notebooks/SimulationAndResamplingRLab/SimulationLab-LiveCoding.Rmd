@@ -165,7 +165,10 @@ mySd <- sd(myNormalSamplesDf$samples)
 
 myNormalSamplesDf <- myNormalSamplesDf %>%
   mutate(lessthan1sd = samples < (myMean - mySd),
-         greaterthan1sd = samples > (myMean + mySd))
+         greaterthan1sd = samples > (myMean + mySd),
+         inside1sd = !lessthan1sd & !greaterthan1sd)
+
+mean(myNormalSamplesDf$inside1sd)
 ```
 
 What about 2 standard deviations?
