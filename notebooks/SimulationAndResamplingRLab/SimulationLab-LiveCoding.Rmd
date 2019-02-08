@@ -3,3 +3,40 @@ title: "Simulation R lab - live coding"
 output: html_notebook
 ---
 
+# Basic concepts to cover
+
+
+## Generating random numbers
+
+
+
+## Sampling with and without replacement
+
+
+
+## Sum of squared errors
+
+
+
+## Standard deviation
+
+
+
+## Sampling error and standard error of the mean
+
+
+
+## Central limit theorem
+
+
+
+## Confidence intervals
+
+
+
+## Bootstrapping
+
+
+
+
+
