@@ -200,7 +200,9 @@ mySampleMean <- function(sampleSize){
 Now run that function 1000 times (using sampleSize = 30) and take the standard deviation of the resulting means.
 
 ```{r}
+mySampleMeans <- replicate(1000,mySampleMean(30))
 
+sd(mySampleMeans)
 ```
 
 Compare this value to the theoretical standard error of the mean:
@@ -210,15 +212,21 @@ SEM = \frac{SD}{\sqrt{n}}
 $$
 
 ```{r}
-
+mySEM <- 1/sqrt(30)
+mySEM
 ```
 
 ## 6. Central limit theorem
 
-Take 1000 samples from a uniform distribution and plot their histogram.
+Take 100000 samples from a uniform distribution and plot their histogram.
 
 ```{r}
+myUniformSamples <- runif(100000)
+myUniformSamplesDf <- 
+  tibble(samples = myUniformSamples)
 
+ggplot(myUniformSamplesDf,aes(samples)) +
+  geom_histogram(bins=50)
 ```
 
 Adapt the function from the previous section to use a uniform distribution instead of a normal.
