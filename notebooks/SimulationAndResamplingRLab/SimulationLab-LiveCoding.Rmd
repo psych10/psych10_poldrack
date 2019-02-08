@@ -233,12 +233,24 @@ Adapt the function from the previous section to use a uniform distribution inste
 
 ```{r}
 
+mySampleMean <- function(sampleSize,myRand = runif){
+  mySample <- myRand(sampleSize)
+  return(mean(mySample))
+}
+
 ```
 
 Run the function 1000 times and plot the histogram of the resulting means.  Try changing the sample size and see how this affects the shape of the sampling distribution.
 
 ```{r}
+myResults <- replicate(1000,mySampleMean(30,myRand = runif))
 
+myResultsDf <- 
+  tibble(results = myResults)
+
+ggplot(myResultsDf,aes(results)) +
+  geom_histogram(bins=50) +
+  xlim(-1,1)
 ```
 
 
