@@ -95,11 +95,20 @@ Compute the mean of the following numbers:
 ```{r}
 testData <- c(1,2,3,4)
 
+testDataMean <- mean(testData)
+
+testDataMean
+
 ```
 
 Compute the sum of squared errors from each of the data points.
 
 ```{r}
+sse1 <- sum((testData[1] - testData)^2)
+
+sse2 <- sum((testData[2] - testData)^2)
+
+sse3 <- sum((testData[3] - testData)^2)
 
 ```
 
