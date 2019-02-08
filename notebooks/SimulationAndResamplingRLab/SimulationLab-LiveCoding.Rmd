@@ -58,12 +58,17 @@ mySampleDf %>%
 Generate a set of 10 unique random integers from 1 to 20, using a uniform distribution.
 
 ```{r}
-myIntegers <- round(runif(10,min=1,max=20))
+myIntegers <- sample.int(20,size = 10,
+                         replace = FALSE)
+myIntegerDf <- tibble(samples = myIntegers)
 ```
 
 Take a sample of size 8 from the dataset, without replacement.
 
 ```{r}
+myIntegerSampleNoReplace <- myIntegerDf %>%
+  sample_n(8,replace = FALSE)
+unique(myIntegerSampleNoReplace)
 
 ```
 
