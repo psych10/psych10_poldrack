@@ -190,6 +190,11 @@ Create a function that takes a sample of a particular size from a standard norma
 
 ```{r}
 
+mySampleMean <- function(sampleSize){
+  mySample <- rnorm(sampleSize)
+  return(mean(mySample))
+}
+
 ```
 
 Now run that function 1000 times (using sampleSize = 30) and take the standard deviation of the resulting means.
