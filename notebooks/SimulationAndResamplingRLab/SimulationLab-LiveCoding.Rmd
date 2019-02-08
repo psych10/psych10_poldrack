@@ -3,40 +3,179 @@ title: "Simulation R lab - live coding"
 output: html_notebook
 ---
 
-# Basic concepts to cover
+```{r}
+library(tidyverse)
+set.seed(12345)
+```
+
+## 1. Generating random numbers
+
+1. Generate 1000 random samples from a normal distribution with a mean of 100 and a standard deviation of 10
+
+```{r}
+
+```
+
+Compute the mean and standard deviation of those data
+
+```{r}
+
+```
+
+Add 10 to the data and see how it affects the mean and standard deviation.
+
+```{r}
+
+```
+
+Multiply the data by 2 and see how it affects the mean and standard deviation
+
+```{r}
+
+```
+
+## 2. Sampling with and without replacement
+
+Generate a set of 10 random integers between 0 and 20, using a uniform distribution.
+
+```{r}
+
+```
+
+Take a sample of size 8 from the dataset, without replacement.
+
+```{r}
+
+```
+
+Take a sample of size 30 from the dataset, without replacement.
+
+```{r}
+
+```
+
+Take a sample of 30 from the dataset, with replacement.
+
+```{r}
+
+```
+
+## 3. Sum of squared errors
+
+Compute the mean of the following numbers:
+
+```{r}
+testData <- c(1,2,3,4)
+
+```
+
+Compute the sum of squared errors from each of the data points.
+
+```{r}
+
+```
+
+Compute the sum of squared errors from the mean
+
+```{r}
+
+```
 
 
-## Generating random numbers
+## 4. Standard deviation and cumulative distributions
+
+Generate a random sample of size 10,000 with a mean of zero and a standard deviation of 1.
+
+```{r}
+
+```
 
 
+Plot a histogram and a cumulative distribution for these data.
 
-## Sampling with and without replacement
+```{r}
 
+```
 
+Add the cumulative density for the normal distribution
 
-## Sum of squared errors
+```{r}
 
+```
 
+What proportion of data points fall within the mean +/- 1 standard deviation?
 
-## Standard deviation
+```{r}
 
+```
 
+What about 2 standard deviations?
 
-## Sampling error and standard error of the mean
+```{r}
 
-
-
-## Central limit theorem
-
-
-
-## Confidence intervals
-
-
-
-## Bootstrapping
+```
 
 
+## 5. Sampling error and standard error of the mean
 
+Create a function that takes a sample of a particular size from a standard normal distribution (mean = 0, standard deviation = 1) and returns the mean of the sample.
+
+```{r}
+
+```
+
+Now run that function 1000 times (using sampleSize = 30) and take the standard deviation of the resulting means.
+
+```{r}
+
+```
+
+Compare this value to the theoretical standard error of the mean:
+
+$$
+SEM = \frac{SD}{\sqrt{n}}
+$$
+
+```{r}
+
+```
+
+## 6. Central limit theorem
+
+Take 1000 samples from a uniform distribution and plot their histogram.
+
+```{r}
+
+```
+
+Adapt the function from the previous section to use a uniform distribution instead of a normal.
+
+```{r}
+
+```
+
+Run the function 1000 times and plot the histogram of the resulting means.  Try changing the sample size and see how this affects the shape of the sampling distribution.
+
+```{r}
+
+```
+
+
+## 7. Confidence intervals
+
+Using the sample from section 1, compute the 95 percent confidence interval for the mean, using the normal distribution.
+
+```{r}
+
+```
+
+
+## 8. Bootstrapping
+
+Using the same data as previous problem, compute the 95 percent confidence interval for the mean using bootstrapping.  
+
+```{r}
+
+```
 
 
