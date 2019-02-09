@@ -4,7 +4,10 @@ output: html_notebook
 ---
 
 ```{r}
+#Libraries
 library(tidyverse)
+
+#Parameters
 set.seed(12345)
 ```
 
@@ -14,22 +17,25 @@ set.seed(12345)
 
 ```{r}
 mySamples <- rnorm(1000,mean = 100, sd = 10)
-mySampleDf <- tibble(samples = mySamples)
+mySampleDf <- tibble(samples = mySamples) #convert from a vector of values to a data frame
 ```
 
 Show the histogram of the data.
 
 ```{r}
-ggplot(mySampleDf,aes(samples)) +
-  geom_histogram(bins=10)
+mySampleDf %>%
+  ggplot(aes(samples)) +
+  geom_histogram(bins = 10)
 ```
 
 Compute the mean and standard deviation of those data
 
 ```{r}
 mySampleDf %>% 
-  summarise(myMean = mean(samples),
-            mySd = sd(samples))
+  summarise(
+    myMean = mean(samples),
+    mySd = sd(samples)
+  )
 ```
 
 Add 10 to the data and see how it affects the mean and standard deviation.
@@ -37,8 +43,10 @@ Add 10 to the data and see how it affects the mean and standard deviation.
 ```{r}
 mySampleDf %>% 
   mutate(samples = samples + 10) %>%
-  summarise(myMean = mean(samples),
-            mySd = sd(samples))
+  summarise(
+    myMean = mean(samples),
+    mySd = sd(samples)
+  )
 
 ```
 
@@ -47,10 +55,10 @@ Multiply the data by 2 and see how it affects the mean and standard deviation
 ```{r}
 mySampleDf %>% 
   mutate(samples = samples*2) %>%
-  summarise(myMean = mean(samples),
-            mySd = sd(samples))
-
-
+  summarise(
+    myMean = mean(samples),
+    mySd = sd(samples)
+  )
 ```
 
 ## 2. Sampling with and without replacement
@@ -58,34 +66,34 @@ mySampleDf %>%
 Generate a set of 10 unique random integers from 1 to 20, using a uniform distribution.
 
 ```{r}
-myIntegers <- sample.int(20,size = 10,
-                         replace = FALSE)
+myIntegers <- sample.int(20, size = 10, replace = FALSE)
 myIntegerDf <- tibble(samples = myIntegers)
 ```
 
 Take a sample of size 8 from the dataset, without replacement.
 
 ```{r}
-myIntegerSampleNoReplace <- myIntegerDf %>%
-  sample_n(8,replace = FALSE)
-unique(myIntegerSampleNoReplace)
+myIntegerSampleNoReplace <- 
+  myIntegerDf %>%
+  sample_n(size = 8,replace = FALSE)
 
+unique(myIntegerSampleNoReplace) #return only unique numbers (don't print duplicates)
 ```
 
-Take a sample of size 30 from the dataset, without replacement.
+Take a sample of size 30 from the dataset, without replacement. Why doesn't this work?
 
 ```{r}
-myIntegerSampleNoReplace <- myIntegerDf %>%
-  sample_n(30,replace = FALSE)
-
+myIntegerSampleNoReplace <-
+  myIntegerDf %>%
+  sample_n(size = 30, replace = FALSE)
 ```
 
-Take a sample of 30 from the dataset, with replacement.
+Take a sample of 30 from the dataset, with replacement. Why does this work?
 
 ```{r}
-myIntegerSampleWithReplace <- myIntegerDf %>%
-  sample_n(30,replace = TRUE)
-
+myIntegerSampleWithReplace <-
+  myIntegerDf %>%
+  sample_n(30, replace = TRUE)
 ```
 
 ## 3. Sum of squared errors
@@ -99,6 +107,7 @@ testDataMean <- mean(testData)
 
 testDataMean
 
+testData
 ```
 
 Compute the sum of squared errors from each of the data points.
@@ -118,13 +127,13 @@ sse3 <- sum((testData[3] - testData)^2)
 
 sse4 <- sum((testData[4] - testData)^2)
 
-print(c(sse1,sse2,sse3,sse4))
+print(c(sse1, sse2, sse3, sse4))
 
 # better way to do it: use a for loop
 
-ssevals <- array(dim=length(testData))
+ssevals <- array(dim = length(testData))
 
-for (i in 1:length(testData)){
+for (i in 1:length(testData)) {
   ssevals[i] <- sum((testData[i] - testData)^2)
 }
 
@@ -132,18 +141,19 @@ print(ssevals)
 
 # an even better way to do it: sapplly
 
-ssevals <- sapply(1:4,function(x) sum((x - testData)**2))
+ssevals <- sapply(X = testData, FUN = function(x) sum((x - testData)**2))
+#X = the data to use
+#FUN = the function to apply to each element of X
 
 print(ssevals)
-
-
 ```
 
 Compute the sum of squared errors from the mean
 
 ```{r}
-
 sseMean <- sum((testDataMean - testData)^2)
+
+print(sseMean)
 ```
 
 
@@ -153,25 +163,27 @@ Generate a random sample of size 10,000 with a mean of zero and a standard devia
 
 ```{r}
 myNormalSamples <- rnorm(10000)
-myNormalSamplesDf <- tibble(
-  samples = myNormalSamples)
-```
 
+myNormalSamplesDf <- 
+  tibble(
+    samples = myNormalSamples
+  )
+```
 
 Plot a histogram for these data.
 
 ```{r}
-ggplot(myNormalSamplesDf,aes(samples)) +
+myNormalSamplesDf %>% 
+  ggplot(aes(samples)) +
   geom_histogram(bins=50)
 ```
 
 Plot a cumulative distribution for these data.
 
 ```{r}
-
-ggplot(myNormalSamplesDf,aes(samples)) +
+myNormalSamplesDf %>% 
+  ggplot(aes(samples)) +
   stat_ecdf()
-  
 ```
 
 Add the cumulative density for the normal distribution
@@ -186,10 +198,13 @@ What proportion of data points fall within the mean +/- 1 standard deviation?
 myMean <- mean(myNormalSamplesDf$samples)
 mySd <- sd(myNormalSamplesDf$samples)
 
-myNormalSamplesDf <- myNormalSamplesDf %>%
-  mutate(lessthan1sd = samples < (myMean - mySd),
-         greaterthan1sd = samples > (myMean + mySd),
-         inside1sd = !lessthan1sd & !greaterthan1sd)
+myNormalSamplesDf <- 
+  myNormalSamplesDf %>%
+  mutate(
+    lessthan1sd = samples < (myMean - mySd),
+    greaterthan1sd = samples > (myMean + mySd),
+    inside1sd = !lessthan1sd & !greaterthan1sd
+  )
 
 mean(myNormalSamplesDf$inside1sd)
 ```
@@ -198,12 +213,13 @@ What about 2 standard deviations?
 
 ```{r}
 myNormalSamplesDf <- myNormalSamplesDf %>%
-  mutate(lessthan2sd = samples < (myMean - 1.96*mySd),
-         greaterthan2sd = samples > (myMean + 1.96*mySd),
-         inside2sd = !lessthan2sd & !greaterthan2sd)
+  mutate(
+    lessthan2sd = samples < (myMean - 2 * mySd),
+    greaterthan2sd = samples > (myMean + 2 * mySd),
+    inside2sd = !lessthan2sd & !greaterthan2sd
+  )
 
 mean(myNormalSamplesDf$inside2sd)
-
 ```
 
 
@@ -212,18 +228,16 @@ mean(myNormalSamplesDf$inside2sd)
 Create a function that takes a sample of a particular size from a standard normal distribution (mean = 0, standard deviation = 1) and returns the mean of the sample.
 
 ```{r}
-
-mySampleMean <- function(sampleSize){
+mySampleMean <- function(sampleSize) {
   mySample <- rnorm(sampleSize)
   return(mean(mySample))
 }
-
 ```
 
 Now run that function 1000 times (using sampleSize = 30) and take the standard deviation of the resulting means.
 
 ```{r}
-mySampleMeans <- replicate(1000,mySampleMean(30))
+mySampleMeans <- replicate(1000, mySampleMean(30))
 
 sd(mySampleMeans)
 ```
@@ -245,11 +259,13 @@ Take 100000 samples from a uniform distribution and plot their histogram.
 
 ```{r}
 myUniformSamples <- runif(100000)
-myUniformSamplesDf <- 
+
+myUniformSamplesDf <-
   tibble(samples = myUniformSamples)
 
-ggplot(myUniformSamplesDf,aes(samples)) +
-  geom_histogram(bins=50)
+myUniformSamplesDf %>% 
+  ggplot(aes(samples)) +
+  geom_histogram(bins = 50)
 ```
 
 Adapt the function from the previous section to use a uniform distribution instead of a normal.
@@ -258,25 +274,24 @@ Adapt the function from the previous section to use a uniform distribution inste
 # here we add a new argument, myRand, which contains as its value the name of the
 # function that we want to use to generate random numbers
 
-mySampleMean <- function(sampleSize,myRand = runif){
+mySampleMean <- function(sampleSize, myRand = runif) {
   mySample <- myRand(sampleSize)
   return(mean(mySample))
 }
-
 ```
 
 Run the function 1000 times and plot the histogram of the resulting means.  Try changing the sample size and see how this affects the shape of the sampling distribution.
 
 ```{r}
+myResults <- replicate(1000, mySampleMean(30, myRand = runif))
 
-myResults <- replicate(1000,mySampleMean(30,myRand = runif))
-
-myResultsDf <- 
+myResultsDf <-
   tibble(results = myResults)
 
-ggplot(myResultsDf,aes(results)) +
-  geom_histogram(bins=50) +
-  xlim(-1,1)
+myResultsDf %>%
+  ggplot(aes(results)) +
+  geom_histogram(bins = 50) +
+  xlim(-1, 1)
 ```
 
 
@@ -285,14 +300,16 @@ ggplot(myResultsDf,aes(results)) +
 Using the sample from section 1, compute the 95 percent confidence interval for the mean, using the normal distribution.
 
 ```{r}
-
 myCI <- mySampleDf %>%
-  summarize(myMean = mean(samples),
-            mySEM = sd(samples)/sqrt(n()),
-            lower_quantile = qnorm(0.025),
-            upper_quantile = qnorm(0.975),
-            lower_CI = myMean + lower_quantile*mySEM,
-            upper_CI = myMean + upper_quantile*mySEM)
+  summarize(
+    myMean = mean(samples),
+    mySEM = sd(samples) / sqrt(n()),
+    lower_quantile = qnorm(0.025),
+    upper_quantile = qnorm(0.975),
+    lower_CI = myMean + lower_quantile * mySEM,
+    upper_CI = myMean + upper_quantile * mySEM
+  )
+
 myCI
 ```
 
@@ -305,40 +322,43 @@ Here we write the bootstrap function ourselves.
 
 ```{r}
 # take in a df and return the mean computed on a sample with replacement
-resampleMean <- function(df){
-  sampleDf <- df %>%
-    sample_n(nrow(df),replace=TRUE)
+resampleMean <- function(df) {
+  
+  sampleDf <- 
+    df %>%
+    sample_n(nrow(df), replace = TRUE)
+  
   return(mean(sampleDf$samples))
 }
 
 # perform this 1000 times
 
-bsResults <- replicate(1000,resampleMean(mySampleDf))
+bsResults <- replicate(1000, resampleMean(mySampleDf))
 
 # get the 2.5 and 97.5 percent quantiles.
 
-bootCI <- quantile(bsResults,c(0.0275,0.975))
+bootCI <- quantile(bsResults, c(0.0275, 0.975))
 print(bootCI)
 ```
 
 
-We could also do this using the built-in `boot()` function from R. It's a bit tricky as it requires us to build a function do compute our statistic on the resampled data.
+We could also do this using the built-in `boot()` function from R. It's a bit tricky as it requires us to build a function to compute our statistic on the resampled data.
 
 ```{r}
-# example based on code from 
+# example based on code from
 # https://uoftcoders.github.io/studyGroup/lessons/r/resampling/lesson/
 
 library(boot)
 
-# Create a function to take a resample of the values, 
+# Create a function to take a resample of the values,
 # and then calculate the mean
 boot_mean <- function(original_vector, resample_vector) {
-    mean(original_vector[resample_vector])
+  mean(original_vector[resample_vector])
 }
 
 # R is number of replications
 mean_results <- boot(mySampleDf$samples, boot_mean, R = 2000)
-ci <- boot.ci(mean_results,type='basic')
+ci <- boot.ci(mean_results, type = "basic")
 print(ci)
 
 ```
