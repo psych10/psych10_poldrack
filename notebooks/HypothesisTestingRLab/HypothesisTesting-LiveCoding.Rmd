@@ -1,0 +1,59 @@
+---
+title: "Hypothesis testing - Live coding notebook"
+output: html_notebook
+---
+
+```{r}
+#Libraries
+library(tidyverse)
+
+#Parameters
+set.seed(12345)
+```
+
+
+### write our own function to perform a t-test
+
+```{r}
+
+```
+
+### Test it to make sure it gives us the same result as t.test()
+
+```{r}
+
+```
+
+### Create a function that generates two groups of data with a given effect size and sample size
+
+```{r}
+
+```
+
+### create a function that:
+### uses the previous function to generate a dataset
+### performs a t-test on that dataset to compare groups
+### returns the p value for the test
+
+```{r}
+
+```
+
+### run this function 5000 times and compute the proportion of significant results
+
+```{r}
+
+```
+
+### run this function 5000 times while varying the level of signal from 0 to 1 in steps of 0.1
+
+```{r}
+
+```
+
+### Plot the proportion of signficant results as a function of effect size
+
+```{r}
+
+```
+
