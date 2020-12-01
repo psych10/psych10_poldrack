@@ -1,0 +1,68 @@
+---
+title: "Probablility Practice"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+```{r include = FALSE}
+knitr::opts_chunk$set(echo=TRUE,results=TRUE)
+```
+
+### Computing simple probabilities
+
+1. A disease is found in 435 people out of 12,654 people who were tested.  What is the probability of the disease?
+
+```{r}
+# empirical probability = number of events / number of samples
+435/12654
+```
+
+2.  What is the probability of choosing a queen of hearts from a deck of standard cards (with no joker)?
+
+```{r}
+# classical probability = 1 / number of possible outcomes
+1/52
+```
+
+### Combining probabilities
+
+3.  What is the probability of choosing a queen of any suit from a deck of standard cards  (with no joker) when drawing a single card?
+
+```{r}
+# this is a union problem - there are four queens, each with probability 1/52,  
+# and we want to know the the probability of choosing any of them, which is a 
+# union problem (i.e. queen of hearts OR spades OR clubs OR diamonds)
+# because it's not possible to for intersections to happen since you are only 
+# drawing a single card, we don't have to worry about double-counting
+
+4*1/52
+```
+
+4. Let's say you draw two cards from standard deck (no jokers), and you replace the card and then shuffle each time, so that the different draws can be considered independent.  What is the probability of drawing a queen on either of the two draws?
+
+```{r}
+# this is also a union problem, but now we have to worry about double-counting.
+
+1/52 + 1/52 - (1/52)**2
+```
+
+
+5. Steph Curry has an average probability of hitting free throws of 0.91. If he shoots three times, what is the probability that he hits all three?  You can assume that the throws are independent.
+
+```{r}
+# this is an intersection problem, so we have to multiply the probabilities 
+# of the individual events together to get the probability of the intersection
+
+0.91**3
+```
+
+6.  You can answer the same problem in a different way using the binomial distribution, which you can obtain using the dbinom() function in R. Use the help function to figure out how to determine the probability of three successes in three trials when the true probability is 0.91.  The answer should be the same as the one in the previous cell.
+
+```{r}
+# using dbinom(x,size,prob) where x is the number of successes, 
+# size is the number of trials, and prob is the probability of the event
+dbinom(3,3,0.91)
+```
+
+
