@@ -1,6 +1,8 @@
 ---
 title: "conditional probability in R"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 This notebook is meant to give additional practice in computing conditional probabilities in R.
@@ -41,7 +43,7 @@ Now compute the probability of being a Democrat.  There are two different ways t
 
 isDemocrat <- electionDf$party == 'D'
 
-# compute the probability of being a Republican overall
+# compute the probability of being a Democrat overall
 
 pDemocrat <- mean(isDemocrat)
 

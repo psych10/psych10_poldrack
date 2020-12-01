@@ -5,7 +5,7 @@ output:
     df_print: paged
 ---
 
-In this session we examine the effects of outliers and how to fix them.  Let's use a sample of 100 individuals from the NHANES adult height data, but alter it so that there is an outlier; let's pretend that height for one of the individuals was accidentally measured in millimeters rather than inches.
+In this session we examine the effects of outliers and how to fix them.  Let's use a sample of 100 individuals from the NHANES adult height data, but alter it so that there is an outlier; let's pretend that height for one of the individuals was accidentally reported in inches rather than centimeters.  Note that we sort the data so that the shortest individual is always the outlier; the results below do not hold exactly if we move an observation from the top to the bottom of the distribution.
 
 ```{r}
 library(ggplot2)
@@ -16,11 +16,11 @@ library(assertthat)
 sampSize=100
 
 NHANES$isChild <- NHANES$Age<18
-NHANES_adult=sample_n(subset(NHANES,select=c('Height'),subset=!isChild & Height!='NA'),sampSize)
-NHANES_outlier=NHANES_adult
-NHANES_outlier[1,1]=NHANES_outlier[1,1]*2.54
+NHANES_adult=sample_n(subset(NHANES,select=c('Height'),subset=!isChild & Height!='NA'),sampSize) %>% arrange(Height)
+NHANES_adult = NHANES_adult %>% mutate(HeightOutlier=Height)
+NHANES_adult$HeightOutlier[1]=NHANES_adult$Height[1]/2.54 # convert original to inches
 
-ggplot(NHANES_outlier,aes(Height)) +
+ggplot(NHANES_adult,aes(HeightOutlier)) +
   geom_histogram(bins=30)
 
 
@@ -30,7 +30,7 @@ Now let's see how the various measures of central tendency are affected by the o
 
 ```{r}
 summaryData=rbind(summarise(NHANES_adult,label='Original',mean=mean(Height),sd=sd(Height),median=median(Height)),
-              summarise(NHANES_outlier,label='Outlier',mean=mean(Height),sd=sd(Height),median=median(Height)))
+              summarise(NHANES_adult,label='Outlier',mean=mean(HeightOutlier),sd=sd(HeightOutlier),median=median(HeightOutlier)))
 print(summaryData)
 ```
 
@@ -47,9 +47,10 @@ samplemean <- function(x, d) {
 
 getSample=function() {
   NHANES$isChild <- NHANES$Age<18
-  NHANES_sample=sample_n(subset(NHANES,select=c('Height'),subset=!isChild & Height!='NA'),sampSize)
-  NHANES_sample['HeightOutlier']=NHANES_sample$Height
-  NHANES_sample$HeightOutlier[1]=NHANES_sample$HeightOutlier[1]*2.54
+  NHANES_sample=sample_n(subset(NHANES,select=c('Height'),subset=!isChild & Height!='NA'),sampSize) %>% 
+    arrange(Height)
+  NHANES_sample$HeightOutlier=NHANES_sample$Height
+  NHANES_sample$HeightOutlier[1]=NHANES_sample$HeightOutlier[1]/2.54
   return(NHANES_sample)
 }
 
@@ -64,7 +65,7 @@ for (i in 1:nSamples){
   results=cbind(summarise(s,mean=mean(Height),median=median(Height),
                         trimmedMean=mean(Height,trim=0.1),
                         bootMean=mean(bootResult$t),bootSd=sd(bootResult$t),
-                        sd=sd(Height),mad=mad(Height),huberMean=huberEst$mu,
+                        sd=sd(Height),mad=mad(Height),iqr=IQR(Height),huberMean=huberEst$mu,
                         huberMAD=huberEst$s),
                 summarise(s,meanOutlier=mean(HeightOutlier),
                         medianOutlier=median(HeightOutlier),
@@ -73,6 +74,7 @@ for (i in 1:nSamples){
                         bootSdOutlier=sd(bootOutlierResult$t),
                         sdOutlier=sd(HeightOutlier),
                         madOutlier=mad(HeightOutlier),
+                        iqrOutlier=IQR(HeightOutlier),
                         huberMeanOutlier=huberEstOutlier$mu,
                         huberMADOutlier=huberEstOutlier$s))
   
@@ -88,23 +90,63 @@ Plot the results against one another
 ggplot(sampleData,aes(mean,meanOutlier,color='mean')) +
   geom_point() +
   geom_abline(slope=1,intercept=0) +
-  xlim(165,175) +
-  ylim(165,175) + 
+  xlim(165,172.5) +
+  ylim(165,172.5) + 
   #geom_point(aes(median,medianOutlier,color='median'),alpha=0.5) +
-  geom_point(aes(trimmedMean,trimmedMeanOutlier,color='trimmedMean'),alpha=0.5) +
-  xlab('Original data') + ylab('With outlier')
+  #geom_point(aes(trimmedMean,trimmedMeanOutlier,color='trimmedMean'),alpha=0.5) +
+  xlab('Original data') + ylab('With outlier') +
+  ggtitle(sprintf('mean difference = %f',mean(sampleData$mean-sampleData$meanOutlier)))
+
+```
+
+How about the trimmed mean?
+
+```{r}
+ggplot(sampleData,aes(trimmedMean,trimmedMeanOutlier,color='mean')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  xlim(165,172.5) +
+  ylim(165,172.5) + 
+  #geom_point(aes(median,medianOutlier,color='median'),alpha=0.5) +
+  #geom_point(aes(trimmedMean,trimmedMeanOutlier,color='trimmedMean'),alpha=0.5) +
+  xlab('Original data') + ylab('With outlier') +
+  ggtitle(sprintf('mean difference = %f',mean(sampleData$trimmedMean-sampleData$trimmedMeanOutlier)))
+
+NHANES_adult$trimmed=FALSE
+NHANES_adult$trimmed[NHANES_adult$HeightOutlier<quantile(NHANES_adult$HeightOutlier,0.1)]=TRUE
+NHANES_adult$trimmed[NHANES_adult$HeightOutlier>quantile(NHANES_adult$HeightOutlier,0.9)]=TRUE
+ggplot(NHANES_adult,aes(HeightOutlier,fill=trimmed)) +
+  geom_histogram(bins=30) 
+  
+
+```
+
+How about the median?
+
+```{r}
+ggplot(sampleData,aes(median,medianOutlier,color='mean')) +
+  geom_point() +
+  geom_abline(slope=1,intercept=0) +
+  xlim(165,172.5) +
+  ylim(165,172.5) + 
+  #geom_point(aes(median,medianOutlier,color='median'),alpha=0.5) +
+  #geom_point(aes(trimmedMean,trimmedMeanOutlier,color='trimmedMean'),alpha=0.5) +
+  xlab('Original data') + ylab('With outlier') +
+  ggtitle(sprintf('mean difference = %f',mean(sampleData$median-sampleData$medianOutlier)))
 
 ```
 
 Can bootstrapping help with outliers?
 
 ```{r}
-ggplot(sampleData,aes(mean,bootMeanOutlier,color='mean')) +
+ggplot(sampleData,aes(bootMean,bootMeanOutlier,color='mean')) +
   geom_point() +
   geom_abline(slope=1,intercept=0) +
-  xlim(165,175) +
-  ylim(165,175) + 
-  xlab('Original data') + ylab('With outlier')
+  xlim(165,173) +
+  ylim(165,173) + 
+  xlab('Original data') + ylab('With outlier') + 
+    ggtitle(sprintf('mean difference = %f',mean(sampleData$bootMean-sampleData$bootMeanOutlier)))
+
 
 ```
 
@@ -124,9 +166,9 @@ We can also look at the effect of outliers on estimates of dispersion.
 
 ```{r}
 ggplot(sampleData,aes(sd,sdOutlier,color='std deviation')) +
-  geom_point() +
+  geom_point() + xlim(10,18) + ylim(10,18) +
   geom_abline(slope=1,intercept=0) +
-  geom_point(aes(mad,madOutlier,color='MAD'),alpha=0.5) +
+  geom_point(aes(iqr,iqrOutlier,color='IQR'),alpha=0.5) +
   xlab('Original data') + ylab('With outlier')
 
 ```
@@ -159,9 +201,9 @@ ggplot(sampleData,aes(huberMAD,huberMADOutlier,color='Huber M-estimator MAD')) +
 
 ```{r}
 maxHumanHeightCm=272
-minHumanHeightCm=55
-assert_that(all(NHANES_outlier$Height>minHumanHeightCm))
-assert_that(all(NHANES_outlier$Height<maxHumanHeightCm))
+minHumanHeightCm=60
+#assert_that(all(NHANES_adult$HeightOutlier>minHumanHeightCm))
+#assert_that(all(NHANES_adult$HeightOutlier<maxHumanHeightCm))
 ```
 
 # review: normal vs. long-tailed distributions
@@ -180,22 +222,83 @@ ggplot(nfriends, aes(Nfriends)) +
   xlab('Number of friends') 
 ```
 
-Plot log-log
+Plot power function
 
 ```{r}
 nfriends = nfriends %>% mutate(logNfriends = log10(Nfriends))
 
 h=hist(nfriends$Nfriends,breaks=seq(min(nfriends$Nfriends)-0.5,max(nfriends$Nfriends)+0.5))
-histDf=data.frame(nfriends=log10(h$mids),number=log10(h$counts/sum(h$counts)))
-#histDf= histDf %>% subset(number>-1)
+histDf=data.frame(nfriends=h$mids,
+                  logNfriends=log10(h$mids),
+                  number=h$counts,
+                  logNumber=log10(h$counts),
+                  sqrtNumber=sqrt(h$counts))
+
+histDf= histDf %>% subset(number>0)
+logfit=lm(logNumber ~ logNfriends,data=histDf)
+print(logfit)
+histDf$logPredicted=10**predict(logfit)*sum(h$counts)
 
 ggplot(histDf, aes(x=nfriends,y=number)) +
   geom_point()  +
+  xlab('Number of friends')  + 
+  geom_line(aes(x=nfriends,y=logPredicted),color='blue') +
+  ylab('Frequency') + ylim(0,350)
+
+ggplot(histDf, aes(x=nfriends,y=number)) +
+  geom_point()  +
+  xlab('Number of friends')  + 
+  ylab('Frequency') 
+
+ggplot(histDf, aes(x=logNfriends,y=logNumber)) +
+  geom_point()  +
   xlab('log(Number of friends)')  + 
-  geom_smooth(method='lm') +
-  ylab('log(frequency)')
+  ylab('log(Frequency)') 
+
+ggplot(histDf, aes(x=nfriends,y=sqrtNumber)) +
+  geom_point()  +
+  xlab('Number of friends')  + 
+  ylab('sqrt(Frequency)') 
+
 ```
 
+Compute sampling distributions for mean for original and log-transformed data with n=30
 ```{r}
+nRuns=1000
+sampSize=30
+sampleMeansOrig=replicate(5000,mean(sample(nfriends$Nfriends,sampSize)))
+sampleMeansLog=replicate(5000,mean(sample(nfriends$logNfriends,sampSize)))
+sampleMeansDf=data.frame(sampleMeansOrig,sampleMeansLog)
+ggplot(sampleMeansDf,aes(sampleMeansOrig)) + geom_histogram(bins=100)
+ggplot(sampleMeansDf,aes(sampleMeansLog)) + geom_histogram(bins=100)
+
+```
+
+A real world example: temporal discounting data from UH2.  
+
+```{r}
+discountData=read.csv('bickelhyplarge.csv',header=FALSE)
+names(discountData)=c('subnum','discountRate')
+discountData = discountData %>% mutate(logDiscountRate=log10(discountRate),
+                                       sqrtDiscountRate=sqrt(discountRate),
+                                       recipDiscountRate=1/discountRate)
+ggplot(discountData,aes(discountRate)) + geom_histogram(bins=100)
+ggplot(discountData,aes(logDiscountRate)) + geom_histogram(bins=100)
+ggplot(discountData,aes(sqrtDiscountRate)) + geom_histogram(bins=100)
+ggplot(discountData,aes(recipDiscountRate)) + geom_histogram(bins=100)
+
+```
+
+Get sampling distributions
+
+```{r}
+nRuns=1000
+sampSize=30
+sampleMeansOrig=replicate(5000,mean(sample(discountData$discountRate,sampSize)))
+sampleMeansLog=replicate(5000,mean(sample(discountData$logDiscountRate,sampSize)))
+sampleMeansDf=data.frame(sampleMeansOrig,sampleMeansLog)
+ggplot(sampleMeansDf,aes(sampleMeansOrig)) + geom_histogram(bins=100)
+ggplot(sampleMeansDf,aes(sampleMeansLog)) + geom_histogram(bins=100)
+
 ```
 

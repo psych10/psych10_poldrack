@@ -154,46 +154,73 @@ We can also see this in real data. Let's work with the Height data from all indi
 
 ```{r}
 
-sampSize=250
-nsamps=2500
-sampMeansFull=array(NA,nsamps)
-
-for (i in 1:nsamps){
-  NHANES_sample=sample_n(NHANES_clean,sampSize)
-  sampMeansFull[i]=mean(NHANES_sample$Height)
-
+# takes a vector
+my_qq <- function(d) {
+  qq_df <- tibble(quantiles=seq(0.01, 0.99, .01)) %>%
+    mutate(y=quantile(d, quantiles),
+           x=qnorm(quantiles, mean=mean(d),
+                                sd=sd(d)))
+  ggplot(qq_df,aes(x,y)) + 
+    geom_point() + 
+    geom_abline(slope=1, intercept=0) + 
+    xlab('Normal distribution quantiles') + 
+    ylab('Observed data quantiles')
 }
-sampMeansFullDf=data.frame(sampMeans=sampMeansFull)
 
-ggplot(sampMeansFullDf,aes(sampMeans)) +
-  geom_histogram(data=NHANES_clean,aes(Height,..density..),bins=500,col='gray',fill='gray') +
-  geom_histogram(aes(y=..density..*0.18),bins=500,col='blue',fill='blue') +
-  xlab('Height (inches)')  + ylim(0,0.065) +
-  annotate('text',x=100,y=0.055,label=sprintf('sample size = %d',sampSize),size=5,hjust=0) +
-  annotate('text',x=100,y=0.05,label=sprintf('std error (observed) = %.03f',sd(sampMeansFull)),size=5,hjust=0) +
-  annotate('text',x=100,y=0.045,label=sprintf('std error (computed) = %.03f',sd(NHANES_clean$Height)/sqrt(sampSize)),size=5,hjust=0)
-
-# add quantiles of standard normal
-normalCDF=data.frame(x=seq(min(sampMeansFull),
-                           max(sampMeansFull),.05))
-normalCDF = normalCDF %>% mutate(cdf= pnorm(x,mean=mean(NHANES_clean$Height),
-                                     sd=sd(NHANES_clean$Height)/sqrt(sampSize)))
-
-ggplot(sampMeansFullDf,aes(sampMeans)) + 
-  stat_ecdf(color='blue',linetype='dotted',size=1) + 
-  geom_line(data=normalCDF,aes(x=x,y=cdf),size=1) + xlim(min(sampMeansFull), max(sampMeansFull)) +
-  annotate('text',x=158,y=0.8,label=sprintf('sample size = %d',sampSize),size=5,hjust=0) 
-
-# from https://mgimond.github.io/ES218/Week06a.html#drawing-a-normal-q-q-plot-from-scratch
-y     <- quantile(sampMeansFull, c(0.25, 0.75)) # Find the 1st and 3rd quartiles
-x     <- qnorm( c(0.25, 0.75))         # Find the matching normal values on the x-axis
-slope <- diff(y) / diff(x)             # Compute the line slope
-int   <- y[1] - slope * x[1]           # Compute the line intercept
-
-ggplot(sampMeansFullDf,aes(sample=sampMeans)) + geom_qq() + 
-  geom_abline(intercept=int, slope=slope)
+mk_samp_figures <- function(sampSize, nsamps) {
+  sampMeansFull=array(NA,nsamps)
+  
+  for (i in 1:nsamps){
+    NHANES_sample=sample_n(NHANES_clean,sampSize)
+    sampMeansFull[i]=mean(NHANES_sample$Height)
+  
+  }
+  sampMeansFullDf=data.frame(sampMeans=sampMeansFull)
+  
+  ggplot(sampMeansFullDf,aes(sampMeans)) +
+    geom_histogram(data=NHANES_clean,aes(Height,..density..),bins=500,col='gray',fill='gray') +
+    geom_histogram(aes(y=..density..*0.18),bins=500,col='blue',fill='blue') +
+    xlab('Height (inches)')  + ylim(0,0.065) +
+    annotate('text',x=100,y=0.055,label=sprintf('sample size = %d',sampSize),size=5,hjust=0) +
+    annotate('text',x=100,y=0.05,label=sprintf('std error (observed) = %.03f',sd(sampMeansFull)),size=5,hjust=0) +
+    annotate('text',x=100,y=0.045,label=sprintf('std error (computed) = %.03f',sd(NHANES_clean$Height)/sqrt(sampSize)),size=5,hjust=0)
+  
+  # add quantiles of standard normal
+  normalCDF=data.frame(x=seq(min(sampMeansFull),
+                             max(sampMeansFull),.05))
+  normalCDF = normalCDF %>% mutate(cdf= pnorm(x,mean=mean(NHANES_clean$Height),
+                                       sd=sd(NHANES_clean$Height)/sqrt(sampSize)))
+  
+  ggplot(sampMeansFullDf,aes(sampMeans)) + 
+    stat_ecdf(color='blue',linetype='dotted',size=1) + 
+    geom_line(data=normalCDF,aes(x=x,y=cdf),size=1) + xlim(min(sampMeansFull), max(sampMeansFull)) +
+    annotate('text',x=mean(sampMeansFull) - sd(sampMeansFull)*.5,
+             y=1.0,
+             label=sprintf('sample size = %d',sampSize),size=5,hjust=0)
+  
+  ggsave(sprintf('normalcdf_n=%d.pdf',sampSize), width=6, height=6, units='in')
 
   
+  my_qq(sampMeansFull)
+  ggsave(sprintf('qq_n=%d.pdf',sampSize), width=6, height=6, units='in')
+  return(sampMeansFull)
+} 
+
+nsamps=2500
+
+sampsizes = c(4, 10, 20, 30, 100, 250)
+for (sampsize in sampsizes){
+  sampMeansFull = mk_samp_figures(sampsize,nsamps)
+}
+
+```
+
+Making a q-q plot from scratch
+```{r}
+sampMeansFull = mk_samp_figures(4,nsamps)
+
+# quantiles of data
+
 ```
 
 How big is large enough?  Try out the demo using these commands:

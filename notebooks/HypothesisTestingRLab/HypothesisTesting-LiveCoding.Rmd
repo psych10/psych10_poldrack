@@ -11,10 +11,64 @@ library(tidyverse)
 set.seed(12345)
 ```
 
-
-### write our own function to perform a t-test
+### Create a function that generates two groups of data with a given effect size and sample size
 
 ```{r}
+
+# the sample size is per group (so the total will be 2 * sampleSize)
+# effect size is in terms of standard deviation units
+
+makeData <- function(effectSize,sampleSize){
+  
+  # first create a data frame containing 2 * sampleSize samples from a
+  # standard normal distributin (mean = 0, sd = 1) in a variable called scores
+  d <- tibble(scores = rnorm(2*sampleSize))
+  
+  # create a dummy variable called group that contains the values 0 for the first sampleSize 
+  # elements, and 1 for the remaining elements
+  # this is a bit tricky so we will give you the full code - the trick is to use the row numbers
+  
+  d <- d %>%
+    rownames_to_column() %>%
+    mutate(rownum = as.integer(rowname),
+           group = as.integer(rownum > sampleSize)) %>%
+    select(-rowname)
+  
+  # now add the effectSize to the rows in group 0
+  d <- d %>%
+    mutate(scores = scores + effectSize*group)
+  
+  # return a data frame that contains
+  return(d)
+}
+
+
+```
+
+
+### write our own function to perform a t-test using data generated with the previous function
+
+```{r}
+
+# take in a data frame like the one generated above
+# assume that we testing the directional hypothesis that group==1 > group==0
+
+myTTest <- function(d){
+  # calculate the values that you need to compute the T statistic
+  
+  dSummary <- d %>%
+    group_by(group) %>%
+    summarize(groupMean = mean(scores),
+              groupSD = var(scores),
+              groupSize = n())
+  
+  # compute the T statistic
+  t <- diff(dSummary$groupMean)/sqrt(dSummary$groupSD[1]/dSummary$groupSize[1] +
+                                       dSummary$groupSD[2]/dSummary$groupSize[2])
+  # compute the p-value
+  p <- pt(t,df=nrow(d)-2,lower.tail = FALSE)
+  return(c(t,p))
+}
 
 ```
 
@@ -22,13 +76,19 @@ set.seed(12345)
 
 ```{r}
 
+# make an example dataset
+d = makeData(.5,36)
+
+# compute t-test using our function
+myResult <- myTTest(d)
+myResult
+
+# compute it using R's t.test
+rResult <- t.test(scores ~ group,data=d,alternative='less',var.equal=TRUE)
+rResult
+
 ```
 
-### Create a function that generates two groups of data with a given effect size and sample size
-
-```{r}
-
-```
 
 ### create a function that:
 ### uses the previous function to generate a dataset
@@ -37,23 +97,84 @@ set.seed(12345)
 
 ```{r}
 
+makeDataAndTest <- function(effectSize,sampleSize){
+  # make the data using the specified effect size and sample size
+  d <- makeData(effectSize,sampleSize)
+  
+  # perform the t-test
+  ttestResult <- myTTest(d)
+  
+  # return the p-value
+  return(ttestResult[2])
+}
 ```
 
-### run this function 5000 times and compute the proportion of significant results
+### create another function to run a simulation in which we perform the makeDataAndTest
+function 1000 times and compute the proportion of significant results
+- when the effect size is 0
 
 ```{r}
 
+runSimulations <- function(nRuns = 1000, effectSize = 0, sampleSize = 36){
+  simResults <- replicate(nRuns,makeDataAndTest(effectSize,sampleSize))
+
+  pSignificant <- mean(simResults<.05)
+  # need to return result as a data frame
+  return(tibble(pSignificant=pSignificant))
+}
+
+runSimulations()
 ```
 
-### run this function 5000 times while varying the level of signal from 0 to 1 in steps of 0.1
+### run this function 1000 times while varying the effect size from 0 to 1 in steps of 0.1
+- Holding sample size constant at 36
+
+To do this we will use the dplyr do() verb
+
 
 ```{r}
+
+simulateEffectSize <- tibble(effectSize = seq(0,1,0.1))
+
+effectSizeResults <- simulateEffectSize %>% 
+  group_by(effectSize) %>% 
+  do(runSimulations(effectSize = .$effectSize))
 
 ```
 
 ### Plot the proportion of signficant results as a function of effect size
 
 ```{r}
+ggplot(effectSizeResults,aes(effectSize,pSignificant)) +
+  geom_line() + 
+  xlab('Effect size (sd units)') +
+  ylab('Proportion of significant results') +
+  geom_hline(yintercept = .05,linetype='dashed') + 
+  ylim(0,1)
+```
+
+### now run this function 1000 times while varying the sample size as specified
+holding the effect size constant at 0.2 (a "small" effect)
+
+
+```{r}
+
+simulateSampleSize <- tibble(sampleSize = 2**seq(5,10))
+
+sampleSizeResults <- simulateSampleSize %>% 
+  group_by(sampleSize) %>% 
+  do(runSimulations(sampleSize = .$sampleSize,effectSize=.2))
 
 ```
 
+### Plot the proportion of signficant results as a function of sample size
+
+```{r}
+ggplot(sampleSizeResults,aes(sampleSize,pSignificant)) +
+  geom_line() + 
+  xlab('Sample size') +
+  ylab('Proportion of significant results') +
+  geom_hline(yintercept = .05,linetype='dashed') + 
+  ylim(0,1) + 
+  scale_x_continuous(breaks=sampleSizeResults$sampleSize)
+```

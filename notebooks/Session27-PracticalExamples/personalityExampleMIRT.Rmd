@@ -163,7 +163,7 @@ summary(lmResultGender)
 
 ```
 
-Wait - when we put both gender and height into the model, suddenly neither of them is significantly related to extraversion.  How could that happen?  It turns out that this is related to the relationship between height and gender.  Let's compute the correlation between these - It might seem weird to compute the correlation between a continuous variable (height) and a binary variable (gender), but it's actually ok - it's known as a "point biserial correlation".
+Wait - when we put both gender and height into the model, suddenly neither of them is significantly related to extraversion.  How could that happen?  It turns out that this is due to the relationship between height and gender.  Let's compute the correlation between these - It might seem weird to compute the correlation between a continuous variable (height) and a binary variable (gender), but it's actually ok - it's known as a "point biserial correlation".
 
 
 ```{r}

@@ -39,8 +39,8 @@ The important thing we see here is that there is a strong effect of Age on Heigh
 
 ```{r}
 
-RMSElinear = sqrt(mean((NHANES_sample$Height -lmResultLinear$fitted.values)**2))
-RMSElinear
+MSElinear = mean((NHANES_sample$Height -lmResultLinear$fitted.values)**2)
+MSElinear
 ```
 
 What happens now if we take a many new samples from NHANES and try to predict Height of those individuals using the same model?
@@ -52,11 +52,11 @@ sampleFit = function(){
     filter(Age>4 & Age<19 & !is.na(Height) & !is.na(Gender)) %>%
     select(Age,Height,Gender) %>%
     sample_n(sampleSize)
-  rmse=sqrt(mean((NHANES_sample2$Height -predict(lmResultLinear,newdata=NHANES_sample2))**2))
+  mse=mean((NHANES_sample2$Height -predict(lmResultLinear,newdata=NHANES_sample2))**2)
 }
 
-RMSElinearNew = replicate(100,sampleFit())
-mean(RMSElinearNew)
+MSElinearNew = replicate(100,sampleFit())
+mean(MSElinearNew)
 ```
 
 Here we see that the model still predicts height well, but slightly less well than it did for the data that the model was fitted to.
@@ -83,8 +83,8 @@ cvPredictions = NHANES_sample %>%
   group_by(ID) %>%
   do(cvPredict(.,NHANES_sample))
 
-RMSEloo = sqrt(mean((cvPredictions$Height-cvPredictions$predictedLOO)**2))
-RMSEloo
+MSEloo = mean((cvPredictions$Height-cvPredictions$predictedLOO)**2)
+MSEloo
 ```
 
 
@@ -223,6 +223,8 @@ cvDf = cvDf %>%
 ggplot(cvDf,aes(x,y)) +
   geom_point() +
   geom_smooth(method='lm',se=FALSE)
+cvDf
+
 ```
 
 To perform cross validation on this dataset, we take each datapoint and fit the model using the remainder of the data points, and then use the model to make a prediction for the left-out data point. 

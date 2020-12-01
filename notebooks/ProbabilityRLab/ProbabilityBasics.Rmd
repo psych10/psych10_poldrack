@@ -21,19 +21,30 @@ outcomes
 ```
 
 ```{r}
+# == tests for equality of each element in a vector
 outcome1isTrue <- outcomes == 1 
 outcome1isTrue
 
 ```
 
 ```{r}
+# taking the mean of a binary vector computes the probability of true items
 p1isTrue <- mean(outcome1isTrue)
 p1isTrue
 
 ```
 
 ```{r}
-outcomeIsEven <- !(outcomes %% 2)
+# %% computes the remainder for each 
+outcomes
+
+remainders <- outcomes %% 2
+remainders
+
+# if a number is even then its remainder should be zero
+# ! means "not" - thus, if something is false/zero, then !something is true
+
+outcomeIsEven <- !remainders
 outcomeIsEven
 
 ```
@@ -111,7 +122,7 @@ myDataFrame %>%
   slice(1:2) 
 ```
 
-`slice()` is a function that selects out rows based on their row number
+`slice()` is a function that selects out rows based on their row number.
 
 You will also notice something we haven't discussed before: %>%.  This is called a "pipe", which is commonly used within the tidyverse (which we will discuss more in the R lab on data wrangling); you can read more [here](http://magrittr.tidyverse.org/). A pipe takes the output from one command and feeds it as input to the next command. In this case, simply writing the name of the data frame (myDataFrame) causes it to be input to the slice() command following the pipe. The benefit of pipes will become especially apparent when we want to start stringing together multiple functions into a single command.
 
@@ -131,19 +142,31 @@ myDataFrameSlice
 myDataFrame %>% 
   filter(n == "russ")
 
-myDataFrame %>% 
-  filter(n == "russ" | n == "lucy") # | indicates "or"
 ```
 
 `filter()` is a function that retains only those rows that meet your stated criteria
 
+```{r}
+myDataFrame %>% 
+  filter(n == "russ" | n == "lucy") # | indicates "or"
+
+```
+
 ### Select a set of columns
+
 ```{r}
 myDataFrame %>% 
   select(x:y)
 ```
 
 `select()` is a function that selects out only those columns you specify using their names
+
+You can also specify a vector of columns to select.
+
+```{r}
+myDataFrame %>% 
+  select(c(x,z))
+```
 
 ### adding a row or column
 
@@ -187,9 +210,12 @@ myDataFrame <-
 myDataFrame
 ```
 
+
 ## Conditional probabilities
 
-Let's determine the conditional probability of someone being unhealthy, given that they are over 70 years of age, using the NHANES dataset.
+Let's determine the conditional probability of someone being unhealthy, given that they are over 70 years of age, using the NHANES dataset.  
+
+Some of the individuals in the NHANES dataset will not have data for particular measurements (e.g., if they didn't answer the question); they will have the value NA, which means "not available".  We don't want to include these in our analyses, so we remove any rows that include an NA value using the drop_na() function.  We do this at the very end, because we only want to remove individuals who have NA for our two variables of interest; if we put the drop_na() command before the select() command, then we would end up removing individuals who had missing data for any of the variables in NHANES, even if they aren't variables that we care about.
 
 ```{r}
 healthDataFrame <-
@@ -209,22 +235,22 @@ First, what's the probability of being over 70?
 ```{r}
 pOver70DataFrame <- 
   healthDataFrame %>%
-  count(Over70) %>%
-  mutate(p = n / sum(n)) %>%
-  filter(Over70 == TRUE)
+  count(Over70) %>% # count the number of people with each value of Over70
+  mutate(p = n / sum(n)) %>% # create a new variable that contains the proportion
+  filter(Over70 == TRUE) # only keep the value for Over70 == TRUE
 
-# to obtain the specific vaule, we need to extract it from the data frame
+# to obtain the specific value, we need to extract it from the data frame
 
 pOver70DataFrame$p
 ```
 
-`count` is a function that counts the number of values for each group of values in a variable; this will create a new dataframe with the grouping variable (i.e., Over70) and the "n" (number) of values for each group (> 70 or not). 
+`count()` is a function that counts the number of values for each group of values in a variable; this will create a new dataframe with the grouping variable (i.e., Over70) and the "n" (number) of values for each group (> 70 or not). 
 
 Second, what's the probability of being unhealthy?
 
 ```{r}
 pUnhealthyDataFrame <- 
-  healthDf %>%
+  healthDataFrame %>%
   count(Unhealthy) %>%
   mutate(p = n / sum(n)) %>%
   filter(Unhealthy == TRUE)
@@ -235,7 +261,7 @@ pUnhealthyDataFrame$p
 What's the probability for each combination of unhealthy/healthly and over 70/ not. 
 
 ```{r}
-pBothDataFrame <- healthDf %>% 
+pBothDataFrame <- healthDataFrame %>% 
   count(Unhealthy, Over70) %>% 
   mutate(p = n/sum(n))
 
@@ -245,8 +271,24 @@ pBothDataFrame
 Finally, what's the probability of someone being unhealthy, given that they are over 70 years of age?
 
 ```{r}
+# compute probability of being unhealthy,
+# given that one is over 70
+
+pUnhealthyGivenOver70DataFrame <-
+  healthDataFrame %>%
+  filter(Over70 == TRUE) %>% # limit to Over70
+  count(Unhealthy) %>% # count each outcome
+  mutate(p = n / sum(n)) %>% # compute probability by 
+                             #dividing n by sum
+  filter(Unhealthy == TRUE) # pull out the specific value 
+
+pUnhealthyGivenOver70DataFrame$p 
+
+# compute the opposite:
+# what the probability of being over 70 given that 
+# one is unhealthy?
 pOver70givenUnhealthyDataFrame <-
-  healthDf %>%
+  healthDataFrame %>%
   filter(Unhealthy == TRUE) %>%
   count(Over70) %>%
   mutate(p = n / sum(n)) %>%
