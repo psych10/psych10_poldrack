@@ -6,12 +6,12 @@ check_values <- function(problem){
     assert_that(is.character(my_major))
     assert_that(is.logical(i_am_senior))
   } else if (problem == 2){
-    assert_that(all(temp_farenheit == c(74, 81, 65, 49)))
-    assert_that(all(temp_celsius == (temp_farenheit - 32) / (5/9)))
+    assert_that(all(temp_fahrenheit == c(74, 81, 65, 49)))
+    assert_that(all(temp_celsius == (temp_fahrenheit - 32) / (5/9)))
     assert_that(all(is_freezing == (temp_celsius < 0)))
-    assert_that(all(c('temp_farenheit', 'temp_celsius', 'is_freezing') %in% names(temp_df)))
+    assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing') %in% names(temp_df)))
   } else if (problem == 3){
-    assert_that(all(c('temp_farenheit', 'temp_celsius', 'is_freezing', 'temp_kelvin') %in% names(temp_df_k)))
+    assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing', 'temp_kelvin') %in% names(temp_df_k)))
     assert_that(all(temp_df_k$temp_kelvin == (temp_celsius +273.15 )))
   } else if (problem == 4){
     assert_that(all_equal(temp_df_k_freezing, filter(temp_df_k, temp_celsius < 0)))
