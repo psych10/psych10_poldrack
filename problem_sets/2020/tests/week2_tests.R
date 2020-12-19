@@ -7,7 +7,7 @@ check_values <- function(problem){
     assert_that(is.logical(i_am_senior))
   } else if (problem == 2){
     assert_that(all(temp_fahrenheit == c(74, 81, 65, 49)))
-    assert_that(all(temp_celsius == (temp_fahrenheit - 32) / (5/9)))
+    assert_that(all(temp_celsius == (temp_fahrenheit - 32) * (5/9)))
     assert_that(all(is_freezing == (temp_celsius < 0)))
     assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing') %in% names(temp_df)))
   } else if (problem == 3){
