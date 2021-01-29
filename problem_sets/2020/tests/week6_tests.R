@@ -60,13 +60,14 @@ check_values <- function(problem){
   else if (problem == 11){
     assert_that(num_sims == 5000)
     assert_that(group_size == 50)  
+    assert_that(total_n == 100)
     set.seed(1) # PROVIDED CODE - DO NOT CHANGE!
     
     sr <- data.frame(p=array(dim=num_sims))
     
     for (i in 1:num_sims){
-      rand_df = data.frame(group1 = rnorm(group_size), group2 = rnorm(group_size) )
-      ttest_result <- t.test(rand_df$group1, rand_df$group2)
+      rand_df = data.frame(group = group_labels, response = rnorm(group_size*2) )
+      ttest_result <- t.test(response ~ group, data=rand_df)
       sr$p[i] <- ttest_result$p.value
     }
     assert_that(all_equal(sr, sim_results))
