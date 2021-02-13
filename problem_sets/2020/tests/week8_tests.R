@@ -1,3 +1,4 @@
+library(assertthat)
 
 check_values <- function(problem){
   if (problem == 1){
