@@ -14,7 +14,7 @@ check_values <- function(problem){
     assert_that(odds_ratio == odds_touching_nomask / odds_touching_mask)
     
   } else if (problem == 4){
-    assert_that(power_result$n == power.t.test(delta=0.2, power=0.8)$n)
+    assert_that(power_result$n == power.t.test(delta=0.5, power=0.8)$n)
   } else if (problem == 5){
     assert_that(n_simulations == 1000)
     
