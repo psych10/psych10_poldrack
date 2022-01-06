@@ -15,19 +15,19 @@ check_values <- function(problem){
     
   } else if (problem == 5){
     assert_that(all(unique_songs == unique(rock_data$SongName)))
-    assert_that(num_songs == length(unique_songs))
+    assert_that(number_of_songs == length(unique_songs))
     
   } else if (problem == 6){
     assert_that(all_equal(song_counts, count(rock_data, SongName)))
     
   } else if (problem == 7){
     assert_that(all_equal(day_counts, count(rock_data, DayOfWeek)))
-    assert_that(all_equal(day_prob, mutate(day_counts, p = n / sum(n))))
+    assert_that(all_equal(day_probability, mutate(day_counts, p = n / sum(n))))
     
   }else if (problem == 8){
     assert_that(all_equal(wftw_data, filter(rock_data, SongName == "Working for the Weekend")))
     assert_that(all_equal(day_counts, count(wftw_data, DayOfWeek)))
-    assert_that(all_equal(day_prob, mutate(day_counts, p = n / sum(n))))
+    assert_that(all_equal(day_probability, mutate(day_counts, p = n / sum(n))))
     
   }else if (problem == 9){
     assert_that(p_friday_given_wftw == mean(wftw_data$DayOfWeek == "Friday"))
