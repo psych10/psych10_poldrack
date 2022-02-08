@@ -1,0 +1,33 @@
+﻿PID,None,participant ID
+Mean_Cat_rating,None,average valence rating for cats 
+Mean_Dog_rating,None,average rating for dogs
+Gender,None,String
+Depression_score,None,Edinburgh Postnatal Depression Scale 
+Anxiety_score,None,Generalised Anxiety Disorder Questionnaire 
+PetsSpecifyNum,"0 - no pet, 1 - dog only 2 cat only, 3 cat and dog ",variable to specify the number of pets reported 
+Age,None,participant age in years 
+duplicate,"{0, Duplicate Case}...",Indicator of each last matching case as Primary
+above12EPDS,scoring above 12 on EPDS ,participants scoring above 12 on this questionnaire 
+PetorNo,"{.00, no pet}., 1 pet ",recategorising participants as pet owners or not 
+above9.4GADQ,None,
+gender_No,"{.00, female}. 1 male ",
+Ethnicity,"{1.00, Hispanic/Latino 2 - white, 3 - asian ",
+Experience_close_re,ECR Questionnaie ,
+SVO_donation,None,Social Value Orientation
+SVO_dollars,None,Social Value Orientation Dollars
+SVO_time,None,Social Value Orientation Time
+prosocial,None,
+egoist,None,
+competitive,None,
+Fantasty,None,
+empathic_concern,None,Interpersonal Reactivity Index
+perspective,None,Interpersonal Reactivity Index
+personaldistress,None,Interpersonal Reactivity Index
+total,None,
+difficulty_describing,None,toronto alexithymia scale
+difficulty_identifying,None,toronto alexithymia scale
+EOT,None,toronto alexithymia scale
+baby_Cry,None,valence rating for baby cry stimuli 
+adult_Cry,None,valence rating for adult cry stimuli 
+human_Crying,None,average for human cry stimuli (infant & adult)
+Adult_neutral,None,valence rating for adult neutral stimuli 
