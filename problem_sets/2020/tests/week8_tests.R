@@ -31,6 +31,8 @@ check_values <- function(problem){
     result_df_test <- data.frame(pvalue=rep(NA, n_simulations),
                                  cohensd = rep(NA, n_simulations))
     set.seed(1) 
+    cohensd_test <- 0.2
+    assert_that(cohensd == cohensd_test)
     
     for (i in 1:n_simulations){
       sport_test <- c(rep('football', sample_size_per_group), 
@@ -38,7 +40,7 @@ check_values <- function(problem){
       
       wings_test <- rnorm(sample_size_per_group*2, mean=mean_wings, sd=sd_wings)
       
-      group_difference_test <- cohensd * sd(wings_test)
+      group_difference_test <- cohensd_test * sd(wings_test)
       
       wings_test = wings_test + group_difference_test * (sport_test == 'basketball')
       
