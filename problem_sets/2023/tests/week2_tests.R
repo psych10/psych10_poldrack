@@ -4,21 +4,21 @@ check_values <- function(problem){
   if (problem == 1){
     assert_that(is.numeric(my_age))
     assert_that(is.character(my_major))
-    assert_that(is.logical(i_am_senior))
+    assert_that(is.logical(i_am_a_senior))
   } else if (problem == 2){
-    assert_that(all(temp_fahrenheit == c(74, 81, 65, 49)))
+    assert_that(all(temp_fahrenheit == c(71, 82, 65, 45)))
     assert_that(all(temp_celsius == (temp_fahrenheit - 32) * (5/9)))
     assert_that(all(is_freezing == (temp_celsius < 0)))
     assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing') %in% names(temp_df)))
   } else if (problem == 3){
     assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing', 'temp_kelvin') %in% names(temp_df_k)))
-    assert_that(all(temp_df_k$temp_kelvin == (temp_celsius +273.15 )))
+    assert_that(all(temp_df_K$temp_kelvin == (temp_celsius +273.15 )))
   } else if (problem == 4){
-    assert_that(all_equal(temp_df_k_freezing, filter(temp_df_k, temp_celsius < 0)))
+    assert_that(all_equal(temp_df_K_freezing, filter(temp_df_K, temp_celsius < 0)))
   } else if (problem == 5){
     assert_that(all_equal(survey_data, suppressMessages(read_csv('https://raw.githubusercontent.com/poldrack/learnr_demos/master/data/surveydata.csv'))))
   } else if (problem == 6){
-    assert_that(all(survey_data$programmed_before == (survey_data$programming_experience > 1)))
+    assert_that(all(survey_data$has_programmed_before == (survey_data$programming_experience > 1)))
   }
   print('good job!')
 }
