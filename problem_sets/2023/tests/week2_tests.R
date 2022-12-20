@@ -11,7 +11,7 @@ check_values <- function(problem){
     assert_that(all(is_freezing == (temp_celsius < 0)))
     assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing') %in% names(temp_df)))
   } else if (problem == 3){
-    assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing', 'temp_kelvin') %in% names(temp_df_k)))
+    assert_that(all(c('temp_fahrenheit', 'temp_celsius', 'is_freezing', 'temp_kelvin') %in% names(temp_df_K)))
     assert_that(all(temp_df_K$temp_kelvin == (temp_celsius +273.15 )))
   } else if (problem == 4){
     assert_that(all_equal(temp_df_K_freezing, filter(temp_df_K, temp_celsius < 0)))
