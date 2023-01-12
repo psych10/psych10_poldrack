@@ -27,7 +27,7 @@ check_values <- function(problem){
   }else if (problem == 8){
     assert_that(all_equal(WFTW_data, filter(song_data, SongName == "Working for the Weekend")))
     assert_that(all_equal(day_plays, count(WFTW_data, DayOfWeek)))
-    assert_that(all_equal(day_prob, mutate(day_plays, p = n / sum(n))))
+    assert_that(all_equal(day_prob_wftw, mutate(day_plays, p = n / sum(n))))
     
   }else if (problem == 9){
     assert_that(p_friday_given_wftw == mean(WFTW_data$DayOfWeek == "Friday"))
