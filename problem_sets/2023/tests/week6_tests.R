@@ -8,7 +8,7 @@ check_values <- function(problem){
   } else if (problem == 2){
     assert_that(num_samples == 5000)
     assert_that(sample_size == 2500)
-    sm <- data.frame(mean=rep(0, num_samples))
+    sm <- data.frame(sample_mean=rep(0, num_samples))
     set.seed(1)
     for (i in 1:num_samples){
       sm$sample_mean[i] = mean(runif(sample_size))
