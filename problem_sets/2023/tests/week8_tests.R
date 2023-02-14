@@ -27,7 +27,7 @@ check_values <- function(problem){
     assert_that(cr$statistic == chisq_result$statistic)
     
   }else if (problem == 3){
-    assert_that(all_equal(std_residuals, chisq_result$residuals))
+    assert_that(mean(std_residuals == chisq_result$residuals) == 1)
     
   } else if (problem == 4){
     assert_that(o_goodhealth_drinks == odds_goodhealth_drinks)
